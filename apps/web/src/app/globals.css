@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+/* Habilita `dark:` no Tailwind v4 (substitui o antigo `darkMode: "class"`).
+   O next-themes aplica `.dark` no <html>. */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Identidade: "caderno de comanda".
+ * Papel quente + tinta marrom + terracota de barro + verde-oliva para concluído.
+ *
+ * Os dois temas usam a mesma lógica quente — no escuro o papel vira marrom
+ * profundo (nunca cinza de dashboard) e o texto é creme, não branco puro.
+ * Todos os contrastes foram calculados (OKLCH → sRGB → WCAG): texto >= 4.5:1
+ * sobre paper/surface/surface-2/surface-3 e sobre os fundos suaves de status;
+ * bordas de campo e anel de foco >= 3:1. Os pares mais apertados são
+ * `--line-strong` sobre `--surface-3` (~3.1:1) e `--brand` sobre `--surface`.
+ */
+:root {
+  --paper: oklch(0.972 0.009 82);
+  --surface: oklch(0.995 0.003 90);
+  --surface-2: oklch(0.955 0.012 82);
+  --surface-3: oklch(0.925 0.014 80);
+
+  --ink: oklch(0.27 0.018 55);
+  --ink-soft: oklch(0.43 0.022 55);
+
+  --line: oklch(0.893 0.012 78);
+  /* 3:1 sobre `--surface-3` (borda de campo/filtro é UI, não ornamento). */
+  --line-strong: oklch(0.6 0.016 74);
+
+  --brand: oklch(0.45 0.13 38);
+  --brand-strong: oklch(0.4 0.12 38);
+  --brand-soft: oklch(0.94 0.035 55);
+  --brand-ink: oklch(0.4 0.11 38);
+  --on-brand: oklch(0.972 0.009 82);
+
+  --ok: oklch(0.42 0.07 150);
+  --ok-soft: oklch(0.94 0.03 150);
+
+  --warn: oklch(0.42 0.09 68);
+  --warn-soft: oklch(0.945 0.045 80);
+
+  --info: oklch(0.42 0.05 240);
+  --info-soft: oklch(0.945 0.015 240);
+
+  --danger: oklch(0.44 0.15 25);
+  --danger-soft: oklch(0.945 0.03 25);
+
+  --neutral-soft: oklch(0.94 0.006 70);
+
+  /* Véu atrás dos modais. Token próprio porque `--ink` inverte no escuro:
+     um véu claro sobre fundo escuro não escurece nada. */
+  --scrim: oklch(0.27 0.02 55 / 0.45);
+
+  /* Papel do caderninho na marca: constante da identidade, não do tema. */
+  --mark-paper: oklch(0.98 0.008 85);
+
+  --shadow-card-color: oklch(0.35 0.03 55 / 0.07);
+  --shadow-float-color: oklch(0.35 0.04 45 / 0.16);
+}
+
+/*
+ * Tema escuro. A superfície sobe em luminosidade conforme se afasta do fundo
+ * (paper < surface < surface-2 < surface-3), como no claro. As cores de status
+ * ficam claras e os fundos suaves escuros — o inverso do claro, mantendo
+ * >= 4.5:1 para o texto de cada par.
+ */
+.dark {
+  --paper: oklch(0.19 0.014 60);
+  --surface: oklch(0.235 0.016 62);
+  --surface-2: oklch(0.28 0.018 62);
+  --surface-3: oklch(0.32 0.018 62);
+
+  --ink: oklch(0.955 0.012 85);
+  --ink-soft: oklch(0.76 0.015 80);
+
+  --line: oklch(0.35 0.012 62);
+  --line-strong: oklch(0.6 0.014 62);
+
+  /* Terracota clareia para continuar legível sobre papel escuro. */
+  --brand: oklch(0.67 0.13 42);
+  --brand-strong: oklch(0.72 0.13 42);
+  --brand-soft: oklch(0.3 0.05 45);
+  --brand-ink: oklch(0.82 0.09 55);
+  --on-brand: oklch(0.18 0.02 50);
+
+  --ok: oklch(0.78 0.09 150);
+  --ok-soft: oklch(0.28 0.04 152);
+
+  --warn: oklch(0.82 0.1 80);
+  --warn-soft: oklch(0.3 0.05 75);
+
+  --info: oklch(0.8 0.06 240);
+  --info-soft: oklch(0.29 0.03 245);
+
+  --danger: oklch(0.72 0.13 28);
+  --danger-soft: oklch(0.3 0.06 28);
+
+  --neutral-soft: oklch(0.3 0.008 70);
+
+  --scrim: oklch(0.08 0.01 60 / 0.7);
+
+  /* Sombra clara não existe no escuro: usa preto com opacidade maior. */
+  --shadow-card-color: oklch(0 0 0 / 0.4);
+  --shadow-float-color: oklch(0 0 0 / 0.55);
+}
+
+@theme inline {
+  --font-sans: var(--font-body-face), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-face), Georgia, "Times New Roman", serif;
+
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-ink: var(--brand-ink);
+  --color-on-brand: var(--on-brand);
+  --color-scrim: var(--scrim);
+
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-neutral-soft: var(--neutral-soft);
+
+  --shadow-card: 0 1px 2px var(--shadow-card-color);
+  --shadow-float: 0 6px 18px var(--shadow-float-color);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    color-scheme: light;
+  }
+
+  /* Sem isso o navegador mantém scrollbar, inputs e autofill no tema claro. */
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body-face), ui-sans-serif, system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display-face), Georgia, serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--brand-soft);
+    color: var(--brand-ink);
+  }
+
+  /* iOS dá zoom em campos com fonte < 16px. Nunca deixe cair disso. */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    font-size: 1rem;
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer utilities {
+  .animate-overlay-in {
+    animation: overlay-in 160ms ease-out;
+  }
+
+  .animate-sheet-in {
+    animation: sheet-in 200ms ease-out;
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Pedidos">
+  <rect width="64" height="64" rx="14" fill="#9e4324"/>
+  <rect x="15" y="12" width="34" height="40" rx="4" fill="#f9f5ec"/>
+  <path d="M16 22h32" stroke="#d9b6a4" stroke-width="2"/>
+  <path d="M23 31h18M23 38h18M23 45h11" stroke="#9e4324" stroke-width="2.5" stroke-linecap="round" opacity="0.55"/>
+  <path d="M23 13v9M32 13v9M41 13v9" stroke="#7a3120" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+</svg>

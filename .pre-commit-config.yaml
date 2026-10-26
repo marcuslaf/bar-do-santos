@@ -3,17 +3,22 @@
 # Instale com: pip install pre-commit && pre-commit install
 # ============================================
 
+# Regras vendored (agentes) não passam por formatação: evita diff de 100+ arquivos.
+exclude: ^(\.agents/|AGENTS-ROUTING\.md)
+
 repos:
   # === Detectar secrets em código ===
   - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
+    rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
+        # Placeholders do template não são segredos reais.
+        exclude: ^(\.env\.example|SECURITY-CHECKLIST\.md)$
 
-  # === Verificar .env não commitado ===
+  # === Verificações estruturais ===
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v4.6.0
     hooks:
       - id: check-merge-conflict
       - id: check-yaml
@@ -22,16 +27,17 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=1000']
 
-  # === Verificar npm audit ===
+  # === Vulnerabilidades em dependências (pnpm workspace) ===
   - repo: local
     hooks:
-      - id: npm-audit
-        name: npm audit
-        entry: bash -c 'if [ -f package.json ]; then npm audit --audit-level=high; fi'
+      - id: pnpm-audit
+        name: pnpm audit (high)
+        entry: bash -c 'if [ -f pnpm-lock.yaml ]; then pnpm audit --audit-level high; fi'
         language: system
         pass_filenames: false
+        files: ^(pnpm-lock\.yaml|package\.json|apps/.*/package\.json)$
 
-  # === Verificar secrets patterns ===
+  # === Padrões de secrets hardcoded ===
   - repo: local
     hooks:
       - id: grep-secrets
@@ -44,12 +50,15 @@ repos:
               "sk_test_[0-9a-zA-Z]{24,}"
               "ghp_[0-9a-zA-Z]{36}"
               "xox[bpsa]-[0-9a-zA-Z]{10,}"
-              "eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_.+/=]*"
-              "password\s*[:=]\s*['\"][^'\"]+['\"]"
-              "secret\s*[:=]\s*['\"][^'\"]+['\"]"
+              "eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9._-]+"
+              "password[[:space:]]*[:=][[:space:]]*[\x27\"][^\x27\"]+[\x27\"]"
+              "secret[[:space:]]*[:=][[:space:]]*[\x27\"][^\x27\"]+[\x27\"]"
             )
             for pattern in "${patterns[@]}"; do
-              if grep -rE "$pattern" --include="*.{ts,tsx,js,jsx,py,java,go,rs,cs}" . 2>/dev/null; then
+              if grep -rEn "$pattern" \
+                --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" \
+                --include="*.py" --include="*.java" --include="*.go" --include="*.rs" --include="*.cs" \
+                --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=.git . 2>/dev/null; then
                 echo "❌ Potential secret detected with pattern: $pattern"
                 echo "   Remove hardcoded secrets and use environment variables."
                 exit 1

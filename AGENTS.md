@@ -1,66 +1,101 @@
-﻿# AGENTS.md — restaurante-pedidos
-
-## Stack Principal
-- **Frontend:** Next.js 15 + React 19 + TS 5.6
-- **Backend:** Supabase (Edge Functions + Postgres)
-- **Database:** Supabase Postgres
-- **Auth:** Supabase Auth
-- **CI/CD:** supabase-cicd-pipeline-implementer + github-actions-dev
-- **Package Manager:** pnpm (preferencialmente), npm
-- **Runtime:** Node.js 22+, Docker
+﻿# AGENTS.md — bar-do-santos
 
 ## Descrição
-Bloco de notas de pedidos para pequeno restaurante: mobile-first, login de equipe, valor opcional por nota e fechamento de caixa.
+Bloco de notas de pedidos do Bar do Santos. Mobile-first, login de equipe por
+**celular + senha** (Supabase Auth, cadastro fechado), captura em 2 campos
+(cliente + pedido), valor opcional por nota e fechamento de caixa por dia operacional.
 
-## Convenções de Código
-- **Naming:** camelCase para variaveis/funcoes, PascalCase para componentes/classes, snake_case para colunas SQL
-- **Imports:** Usar @/ path aliases (configurado em tsconfig)
-- **Estilo:** Sempre usar const > let. Nunca var.
-- **Components:** Functional components com hooks. Sem class components.
-- **SQL:** Lowercase para keywords, timestamptz para datas, plural para tabelas
-- **Commits:** Conventional Commits (feat:, fix:, chore:, refactor:, test:, docs:)
+## Stack Principal
+- **Frontend:** Next.js 15 (App Router) + React 19 + TypeScript
+- **Estilo:** Tailwind CSS v4 (`@import "tailwindcss"`, sem tailwind.config.js)
+- **Backend:** Supabase (Postgres + RLS + Realtime broadcast + Server Actions)
+- **Auth:** Supabase Auth (celular + senha; e-mail sintético interno
+  `<digitos>@celular.local`, criado pelo dono com senha temporária)
+- **Testes:** Vitest (lógica pura) + pgTAP (banco, quando houver)
+- **Package Manager:** pnpm (workspace: `apps/web`)
+- **Deploy:** Vercel (web) + Supabase (banco)
 
 ## Comandos Essenciais
-\\\ash
-# Dev
-pnpm dev              # Iniciar dev server
-pnpm build            # Build de producao
-pnpm lint             # Verificar lint
-pnpm typecheck        # Verificar tipos
-pnpm test             # Rodar testes unitarios
-pnpm test:e2e         # Rodar testes E2E
+```bash
+# Dev (na raiz)
+pnpm dev              # Next dev em apps/web
+pnpm build            # Build de produção
+pnpm lint             # ESLint
+pnpm typecheck        # tsc --noEmit
+pnpm test             # Vitest
 
-# Docker
-docker compose up -d  # Subir stack local
-docker compose down   # Parar stack
+# Supabase
+supabase start                    # stack local (Docker)
+supabase db push --linked         # aplica migrations no remoto
+supabase migration new <nome>     # nova migration versionada
+supabase db diff --linked         # detecta drift
 
-# Validacao agents
-.\scripts\validate-agents.ps1
-\\\
+# Agentes
+pwsh scripts/validate-agents.ps1 -Strict
+```
 
-## Regras de Seguranca
-- NUNCA logar ou expor chaves de API, tokens JWT, ou secrets
-- NUNCA commitar .env, .env.local, ou arquivos com credenciais
-- Sempre usar variaveis de ambiente para configuracao sensivel
-- Validar input do usuario em toda camada (client + server)
+## Estrutura
+```text
+apps/web/src/
+├── app/                 # rotas (login, lista, nova, nota/[id], caixa, equipe)
+├── components/          # UI (client components)
+├── lib/
+│   ├── actions/         # Server Actions (orders, auth)
+│   ├── supabase/        # clients server/browser/admin + middleware
+│   ├── data.ts          # queries (Server Components)
+│   ├── cash.ts          # agregação pura do fechamento
+│   ├── format.ts        # BRL, datas, iniciais
+│   └── types.ts         # contrato de tipos do domínio
+└── middleware.ts        # guarda de sessão
 
-## Fluxo de Trabalho Automático
-- Após cada alteração no código, **executar automaticamente**:
-  1. \git add <arquivos modificados>\ + \git commit -m "tipo: descrição"\
-  2. **Perguntar** se deseja fazer push para o repositório
-  3. **Perguntar** se deseja fazer deploy
-- **Não esperar o usuário lembrar** — fazer como parte natural da entrega
-- Seguir Conventional Commits (feat:, fix:, refactor:, chore:)
+supabase/
+├── migrations/          # schema, RLS, triggers, realtime
+└── seed.sql             # org única do bar
+```
+
+## Modelo de dados (resumo)
+- `orgs` — o bar (timezone, `day_cutoff_hour`). Uma linha no v1.
+- `org_members` — vínculo usuário↔org com `role` (`owner` | `staff`) e `phone`
+  (celular de acesso: só dígitos, DDD incluso, sem +55).
+- `orders` — a nota: `customer_name`, `description`, `status`, `total_cents`,
+  `payment_method`, carimbos de entrega/pagamento/cancelamento, `day_key`.
+- `order_events` — trilha append-only de toda mudança de estado.
+- `orders_view` — `orders` + nomes de autor/pagador/cancelador.
+
+## Regras de negócio
+- Status: `aberto` → `entregue` → `pago`, ou `cancelado`. `pago` e `cancelado` são terminais.
+- `pago` exige `total_cents` e `payment_method`. `cancelado` exige motivo e é exclusivo do `owner`.
+- `day_key` é calculado no banco (timezone + corte, default 04:00) e nunca aceito do cliente.
+- Valor é opcional na captura; obrigatório apenas no pagamento.
+
+## Regras de Segurança
+- RLS obrigatório em toda tabela; policies por operação com `(select auth.uid())`.
+- `orders` não tem policy de DELETE: cancelamento é status, não remoção.
+- `SUPABASE_SERVICE_ROLE_KEY` só em código de servidor (`lib/supabase/admin.ts`), nunca com prefixo `NEXT_PUBLIC_`.
+- Server Actions revalidam autorização no servidor; nunca confiar em papel vindo do cliente.
+- Validação de entrada com Zod em toda action.
+- O e-mail de Auth é sintético (`<digitos>@celular.local`): nunca exibir na UI,
+  nem em mensagens de erro/logs. A UI mostra apenas o celular formatado.
+- NUNCA commitar `.env` ou `.env.local`. Segredos apenas em variáveis de ambiente.
+
+## Tema e responsividade (padrões obrigatórios)
+- **Tema:** claro/escuro com `next-themes` (`attribute="class"`), tokens semânticos, botão de 2 estados no header (claro ↔ escuro; a primeira visita segue o SO). Componente nunca usa cor literal.
+- **Responsividade:** toda tela funciona em 320px de largura e em altura ≤ 480px (celular deitado, tablet de balcão). Zero scroll horizontal; `/nova` e `/nota/[id]` com a ação primária visível nessas alturas; alvos ≥ 44px; inputs com `font-size` ≥ 16px; `100dvh` e `env(safe-area-inset-bottom)` nas barras fixas.
+- Antes de entregar tela nova ou alterada: medir a matriz de viewports e anexar a tabela overflow antes/depois. Receita e critérios em `.agents/rules/responsive-auditor.md`.
+
+## Convenções de Código
+- camelCase para variáveis/funções, PascalCase para componentes, snake_case para SQL.
+- `const` sempre; `let` só quando inevitável; nunca `var`.
+- Componentes funcionais com hooks. Sem class components.
+- Imports com alias `@/`.
+- Commits em Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`, `docs:`).
 
 ## Memória entre Sessões (MCP Memory)
-- Ao finalizar cada projeto/tarefa, salvar automaticamente no MCP memory:
-  - **Entidade:** nome do projeto com type \projeto\
-  - **Observações:** stack usada, features implementadas, URL de deploy, repositório GitHub
-  - **Relações:** conectar entidades relacionadas (ex: \projeto_X → tecnologias → Next.js\)
-- No início de cada novo projeto, consultar o memory graph primeiro
-- Usar \memory_create_entities\ + \memory_create_relations\ para persistir contexto
+- Consultar o memory graph no início de cada sessão de trabalho.
+- Registrar stack, features e caminho do projeto ao finalizar entregas.
 
-## Referencias
-- Agents locais: \.agents/rules/\
-- Roteamento: \AGENTS-ROUTING.md\
-- Validação: \scripts/validate-agents.ps1\
+## Referências
+- Agents locais: `.agents/rules/` · Roteamento: `AGENTS-ROUTING.md`
+- Validação: `scripts/validate-agents.ps1`
+- Checklist de segurança: `docs/SECURITY-CHECKLIST.md`
+- Modelo de dados detalhado: `docs/architecture/data-model.md`

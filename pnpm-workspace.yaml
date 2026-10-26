@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 11: build scripts precisam de aprovação explícita.
+# unrs-resolver é usado pelo resolver do ESLint (eslint-config-next).
+allowBuilds:
+  unrs-resolver: true

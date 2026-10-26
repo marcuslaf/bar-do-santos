@@ -1,104 +1,221 @@
-﻿# restaurante-pedidos
+﻿# Bar do Santos
 
-Bloco de notas de pedidos para pequeno restaurante: mobile-first, login de equipe, valor opcional por nota e fechamento de caixa.
+Bloco de notas de pedidos do Bar do Santos: substitui o caderno de papel mantendo a mesma velocidade de anotação.
+*Order notepad for Bar do Santos: replaces the paper pad while keeping the same capture speed.*
 
-## Sobre / About
+---
 
-Projeto full-stack scaffolded com agents locais, CI/CD, Docker e a base de segurança (security-foundation) já aplicada: .gitignore e .env.example oficiais, pre-commit com detecção de secrets e checklist de segurança.
+## O que é / What it is
 
-Full-stack project scaffolded with local agents, CI/CD, Docker, and the security-foundation base already applied: official .gitignore and .env.example, pre-commit secret detection, and the security checklist.
+Uma tela de login para a equipe e um caderno digital mobile-first. Cada nota tem **dois campos**: nome do cliente e o que ele pediu. O resto (quem anotou, que horas, status, valor) é registrado sem digitação extra.
+
+A team login plus a mobile-first digital notepad. Each note has **two fields**: customer name and the order. Everything else (author, time, status, amount) is recorded without extra typing.
+
+- Notas compartilhadas em tempo real entre salão e cozinha.
+- Valor é opcional na anotação e obrigatório apenas no pagamento.
+- Fechamento de caixa por dia operacional (vira às 04:00, não à meia-noite).
+- Cancelamento exige motivo e fica registrado — só o dono cancela.
+
+---
 
 ## Stack
 
-- **Frontend:** Next.js 15 + React 19 + TS 5.6
-- **Backend:** Supabase (Edge Functions + Postgres)
-- **Database:** Supabase Postgres
-- **Auth:** Supabase Auth
+| Camada | Tecnologia |
+|---|---|
+| Web | Next.js 15 (App Router) + React 19 + TypeScript |
+| Estilo | Tailwind CSS v4 |
+| Banco/Auth | Supabase (Postgres + RLS + Realtime broadcast) |
+| Validação | Zod |
+| Testes | Vitest |
+| Deploy | Vercel + Supabase |
 
-## Quick Start / Início Rápido
+---
 
-```bash
-# 1. Clone e entre no diretório / clone and cd into the directory
-cd restaurante-pedidos
-
-# 2. Configure variáveis de ambiente / set up environment variables
-cp .env.example .env
-# Edite .env: preencha JWT_SECRET (e ANON_KEY/SERVICE_ROLE_KEY se usar Supabase)
-# Edit .env: fill JWT_SECRET (and ANON_KEY/SERVICE_ROLE_KEY for Supabase)
-
-# 3. Ative os hooks de pré-commit (requer: pip install pre-commit)
-#    Enable pre-commit hooks
-pre-commit install
-
-# 4. Suba a stack com Docker / bring the stack up with Docker
-docker compose up -d
-
-# 5. Verifique / verify
-docker compose ps
-curl http://localhost:3000       # Frontend
-curl http://localhost:3001/health  # Backend
-```
-
-> **Nota PT:** Após criar o `package.json` do projeto, configure husky + lint-staged com o comando `/setup-hooks` do OpenCode ou executando `powershell -ExecutionPolicy Bypass -File "C:\Users\marcu\.config\opencode\scripts\setup-hooks.ps1"`.
->
-> **EN note:** After creating the project's `package.json`, set up husky + lint-staged via OpenCode's `/setup-hooks` command or by running the `setup-hooks.ps1` script referenced above.
-
-## Estrutura do Projeto / Project Structure
+## Como funciona / How it works
 
 ```text
-restaurante-pedidos/
-├── apps/
-│   ├── web/              # Frontend Next.js / Next.js frontend
-│   └── api/              # Backend API
-├── packages/
-│   ├── shared/           # Types compartilhados (Zod/OpenAPI) / shared types
-│   ├── ui/               # Componentes UI compartilhados / shared UI components
-│   ├── config/           # Configuração compartilhada / shared config
-│   └── db/               # Migrations e schema
-├── .agents/rules/        # Agents especializados locais / local specialist agents
-├── .github/workflows/    # CI/CD GitHub Actions (inclui secret-scan)
-├── docs/                 # Documentação (inclui SECURITY-CHECKLIST.md) / docs
-├── scripts/              # validate-agents.ps1, pre-push-hook.ps1
-├── .gitignore            # Base security-foundation + padrões do stack
-├── .env.example          # Template de variáveis (NUNCA committar .env)
-├── .pre-commit-config.yaml  # Detecção de secrets / secret detection
-├── docker-compose.yml
-├── AGENTS.md             # Instruções globais / global agent instructions
-└── AGENTS-ROUTING.md     # Matriz de roteamento / routing matrix
+login → lista do dia → "+ Nova nota" (2 campos) → salvar
+                          ↓
+                 cozinha vê na hora (realtime)
+                          ↓
+              marcar entregue → marcar pago (valor + forma)
+                          ↓
+                    fechamento do dia (/caixa)
 ```
 
-## Agents Disponíveis / Available Agents
+1. **`/login`** — celular e senha. Cadastro é fechado: só o dono cria acessos.
+   *`/login` — phone number and password. Signup is closed: only the owner creates accounts.*
+2. **`/`** — o caderno aberto: notas do dia, busca por nome ou texto, filtros.
+3. **`/nova`** — captura em 2 campos; o valor fica recolhido atrás de "+ valor".
+4. **`/nota/[id]`** — detalhe, edição, entregar, pagar, cancelar (com motivo).
+5. **`/caixa`** — total pago, em aberto, por forma de pagamento e por operador.
+6. **`/equipe`** — só o dono: criar acesso por celular (senha temporária exibida
+   uma vez), excluir quem saiu da equipe e ver o número de cada pessoa.
+   *Owner only: create an account by phone number (temporary password shown once),
+   remove members who left and see each member's number.*
 
-Use `AGENTS-ROUTING.md` para saber qual agent delegar. Validação: `pwsh scripts/validate-agents.ps1 -Strict`.
+---
 
-Use `AGENTS-ROUTING.md` to know which agent to delegate to. Validation: `pwsh scripts/validate-agents.ps1 -Strict`.
+## Requisitos / Requirements
 
-## Comandos Úteis / Useful Commands
+- Node.js 20+ (testado em 24)
+- pnpm 11+
+- Projeto Supabase (cloud) **ou** Docker para o Supabase local
+
+> Docker não está disponível nesta máquina: use um projeto Supabase cloud e `supabase link`.
+
+---
+
+## Setup / Getting started
+
+### 1. Instalar dependências
 
 ```bash
-# Validar agents / validate agents
-pwsh scripts/validate-agents.ps1 -Strict
-
-# Secret scan em todos os arquivos / scan all files for secrets
-pre-commit run --all-files
-
-# Ver logs / tail logs
-docker compose logs -f
-
-# Parar tudo / stop everything
-docker compose down
-
-# Rebuild
-docker compose up -d --build
+pnpm install
 ```
+
+### 2. Configurar variáveis
+
+```bash
+cp .env.example apps/web/.env.local
+```
+
+Preencha em `apps/web/.env.local`:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+SUPABASE_SERVICE_ROLE_KEY=<service role key>   # só servidor
+```
+
+A `SERVICE_ROLE_KEY` ignora RLS. Ela é usada apenas em Server Actions já autorizadas
+(`inviteMember`, `removeMember`). **Nunca** use o prefixo `NEXT_PUBLIC_` nela.
+
+### 3. Aplicar o banco
+
+```bash
+supabase link --project-ref <ref>
+supabase db push
+```
+
+O `db push` aplica `supabase/migrations/` (schema, RLS, triggers, realtime).
+Em ambiente local com Docker: `supabase start && supabase db reset` (roda o seed).
+
+### 4. Criar o primeiro acesso (dono) / Create the first access (owner)
+
+O login é **celular + senha**. No Supabase Auth o e-mail é sintético e derivado do
+celular (`<somente_digitos>@celular.local`); o dono não digita nem vê esse e-mail no app.
+
+*Login is **phone number + password**. Supabase Auth stores a synthetic email derived
+from the phone (`<digits>@celular.local`); the owner never types or sees it in the app.*
+
+O dono não pode nascer por SQL (a senha vive no `auth.users`).
+
+1. Dashboard → **Authentication → Users → Add user** com o e-mail sintético
+   do seu celular (ex.: `11999990000@celular.local`) e uma senha, auto-confirm.
+2. SQL Editor, apontando para o mesmo e-mail sintético:
+
+```sql
+select public.bootstrap_owner('11999990000@celular.local');
+```
+
+3. Entre no app com o celular (ex.: `(11) 99999-0000`) e a senha. Os demais acessos saem
+   de `/equipe`, onde o dono informa apenas o celular.
+
+> `scripts/dev-users.ps1` cria os acessos de teste `11999990002` (equipe) e
+> `11999990003` (sem vínculo). O **dono de teste** (`11999990001`) é criado apenas
+> se a org ainda não tiver owner; com um dono real já cadastrado, o script apenas
+> informa quem é. Credenciais reais não ficam no repositório.
+
+*The remaining accounts are created in `/equipe`; the owner only provides the phone number.*
+
+### 5. Rodar
+
+```bash
+pnpm dev      # http://localhost:3000
+```
+
+---
+
+## Scripts
+
+| Comando | O que faz |
+|---|---|
+| `pnpm dev` | Next dev em `apps/web` |
+| `pnpm build` | Build de produção |
+| `pnpm lint` | ESLint |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm test` | Vitest |
+
+---
+
+## Estrutura / Structure
+
+```text
+apps/web/src/
+├── app/                 # rotas: login, lista, nova, nota/[id], caixa, equipe
+├── components/          # UI client-side
+├── lib/
+│   ├── actions/         # Server Actions (orders, auth)
+│   ├── supabase/        # clients server/browser/admin + middleware
+│   ├── data.ts          # queries
+│   ├── cash.ts          # agregação do fechamento (testada)
+│   ├── format.ts        # BRL, datas, iniciais
+│   ├── phone.ts         # celular: normalização, máscara e e-mail sintético
+│   └── types.ts         # contrato de tipos
+└── middleware.ts        # guarda de sessão
+
+supabase/
+├── migrations/          # schema + RLS + triggers + realtime
+└── seed.sql
+
+docs/
+├── architecture/data-model.md   # schema detalhado, matriz de permissões, transições
+└── SECURITY-CHECKLIST.md
+```
+
+---
+
+## Segurança / Security
+
+- **RLS em todas as tabelas**, policies por operação com `(select auth.uid())`.
+- **Zero policy de DELETE** em `orders`: cancelar é status, não remoção.
+- **Autorização no banco**, não só na UI: transições de status e cancelamento
+  são validadas por trigger; o app só reflete a regra.
+- **Cadastro fechado** (`enable_signup = false` no config local; desligue também
+  no Dashboard em *Authentication → Providers → Email*).
+- **Service role só no servidor**, com checagem prévia de papel `owner`.
+- **Auditoria append-only** em `order_events` (quem criou, editou, entregou, pagou, cancelou).
+- CI com **gitleaks** + hooks globais de lint/typecheck no commit.
+- Checklist completo: [`docs/SECURITY-CHECKLIST.md`](docs/SECURITY-CHECKLIST.md).
+
+---
+
+## Limitações conhecidas / Known limitations
+
+- **Single-org**: uma instância por estabelecimento. Multi-tenant exigiria seletor de org.
+- **Sem cardápio**: o pedido é texto livre; não há total automático por item.
+- **Senha temporária** é exibida uma única vez ao dono; não há fluxo de "esqueci a senha"
+  (o e-mail do Auth é sintético e não recebe mensagens).
+  *Temporary password is shown once to the owner; there is no password recovery flow
+  (the Auth email is synthetic and receives no mail).*
+- **Sem impressão térmica** na v1.
+- **Realtime** degrada para atualização manual se o serviço estiver indisponível; há polling de 20s como rede de segurança.
+
+### Roadmap
+1. Troca de senha no primeiro acesso.
+2. Recuperação de senha pelo celular (SMS/WhatsApp) ou troca assistida pelo dono.
+3. Cardápio opcional com preço por item (sem perder a captura em 2 campos).
+4. Exportação do caixa (CSV) e impressão de comanda.
+
+---
 
 ## Deploy
 
-Configure os secrets no GitHub Actions / configure these GitHub Actions secrets:
-- `DOCKER_REGISTRY`
-- `DOCKER_USERNAME`
-- `DOCKER_PASSWORD`
-- `PRODUCTION_DATABASE_URL`
-- `PRODUCTION_JWT_SECRET`
-
-Push para `main` dispara build + deploy automático. / Push to `main` triggers automatic build + deploy.
+1. **Vercel**: importe o repositório, root directory `apps/web`, e configure
+   `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY` (server-only).
+2. **Supabase**: `supabase db push` no projeto de produção e `bootstrap_owner`
+   com o e-mail sintético do dono (`<digitos>@celular.local`).
+3. Em *Authentication → URL Configuration*, adicione a URL da Vercel em
+   **Site URL** e **Redirect URLs**.
