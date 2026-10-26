@@ -124,3 +124,8 @@ supabase/.env
 out/
 .turbo/
 pnpm-debug.log*
+.vercel
+.env.local
+
+# Tooling local de agentes (não faz parte do projeto)
+.agents/rules/
