@@ -1,0 +1,126 @@
+# ============================================
+# .gitignore SEGURO - Foundation Template
+# Copie e adapte para cada projeto
+# ============================================
+
+# === SECRETS / ENV ===
+.env
+.env.*
+!.env.example
+!.env.template
+*.env.local
+*.env.production
+*.env.staging
+
+# === SECRETS EM QUALQUER FORMATO ===
+**/*.pem
+**/*.key
+**/*.cert
+**/*.crt
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/*.secret
+**/*.secrets
+
+# === CREDENCIAIS ===
+**/credentials.json
+**/service-account*.json
+**/*-service-account*.json
+**/.gcloudignore
+**/keyfile.json
+
+# === NODE.JS ===
+node_modules/
+.next/
+.nuxt/
+.output/
+dist/
+build/
+.cache/
+*.tsbuildinfo
+
+# === PYTHON ===
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# === JAVA ===
+target/
+*.class
+*.jar
+*.war
+*.ear
+.gradle/
+.idea/
+*.iml
+
+# === C# / .NET ===
+bin/
+obj/
+*.user
+*.suo
+*.csproj.user
+
+# === GO ===
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# === RUST ===
+/target/
+
+# === DOCKER ===
+docker-compose.override.yml
+
+# === IDE / EDITOR ===
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === LOGS ===
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === COVERAGE / TESTS ===
+coverage/
+.nyc_output/
+htmlcov/
+
+# === SUPABASE ===
+supabase/.temp/
+supabase/.env
+
+# === DEPLOY ===
+.vercel/
+.netlify/
+.firebase/
+
+# === BUILD ARTIFACTS ===
+*.map
+*.chunk.js
+*.chunk.css
+
+# === STACK ESPECIFICO (scaffolder) ===
+out/
+.turbo/
+pnpm-debug.log*
