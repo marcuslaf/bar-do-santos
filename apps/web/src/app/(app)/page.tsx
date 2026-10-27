@@ -66,6 +66,14 @@ export default async function OrdersPage({
     { key: "prontos" as const, label: "Prontos", count: readyOrders.length },
   ];
 
+  /*
+   * Com o caderno em branco (sem busca, sem filtro) o estado vazio já traz o
+   * CTA "Anotar primeira nota" no meio da tela; o FAB logo abaixo virava uma
+   * segunda porta para a mesma ação e cobria o canto do card. Nos demais casos
+   * (notas filtradas, busca sem resultado) o FAB é a única saída para anotar.
+   */
+  const showFab = !(orders.length === 0 && query === "" && filter === "todos");
+
   return (
     <div>
       <OrdersRealtime orgId={session.orgId} />
@@ -179,17 +187,19 @@ export default async function OrdersPage({
       </div>
 
       {/* Celular: CTA flutuante acima da barra de navegação. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] z-30 md:hidden">
-        <div className="mx-auto flex w-full max-w-3xl justify-end px-4">
-          <Link
-            href="/nova"
-            className="pointer-events-auto inline-flex min-h-14 items-center gap-2 rounded-full bg-brand px-5 text-on-brand shadow-float transition-colors duration-150 hover:bg-brand-strong active:bg-brand-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-          >
-            <IconPlus size={22} />
-            <span className="text-[15px] font-semibold">Nova nota</span>
-          </Link>
+      {showFab ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] z-30 md:hidden">
+          <div className="mx-auto flex w-full max-w-3xl justify-end px-4">
+            <Link
+              href="/nova"
+              className="pointer-events-auto inline-flex min-h-14 items-center gap-2 rounded-full bg-brand px-5 text-on-brand shadow-float transition-colors duration-150 hover:bg-brand-strong active:bg-brand-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
+              <IconPlus size={22} />
+              <span className="text-[15px] font-semibold">Nova nota</span>
+            </Link>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
