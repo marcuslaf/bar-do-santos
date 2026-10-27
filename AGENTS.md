@@ -10,7 +10,7 @@ Bloco de notas de pedidos do Bar do Santos. Mobile-first, login de equipe por
 - **Estilo:** Tailwind CSS v4 (`@import "tailwindcss"`, sem tailwind.config.js)
 - **Backend:** Supabase (Postgres + RLS + Realtime broadcast + Server Actions)
 - **Auth:** Supabase Auth (celular + senha; e-mail sintético interno
-  `<digitos>@celular.local`, criado pelo dono com senha temporária)
+  `<digitos>@celular.local`, acesso criado pelo dono **com a senha que ele digita**)
 - **Testes:** Vitest (lógica pura) + pgTAP (banco, quando houver)
 - **Package Manager:** pnpm (workspace: `apps/web`)
 - **Deploy:** Vercel (web) + Supabase (banco)
@@ -74,6 +74,16 @@ supabase/
 - `SUPABASE_SERVICE_ROLE_KEY` só em código de servidor (`lib/supabase/admin.ts`), nunca com prefixo `NEXT_PUBLIC_`.
 - Server Actions revalidam autorização no servidor; nunca confiar em papel vindo do cliente.
 - Validação de entrada com Zod em toda action.
+- Senha definida pelo dono em `/equipe`: a política vive em `lib/password.ts`
+  (mínimo 8, teto de 72 **bytes** do bcrypt, blocklist com celular/nome/nome do bar) e é
+  usada pelo formulário e pela action. Senha nunca é normalizada, logada nem devolvida
+  na resposta; o `<form>` do convite usa `method="post"` para não vazar senha na URL
+  antes da hidratação.
+- Redefinir senha (`resetMemberPassword`) usa `updateUserById`, que **revoga as sessões**
+  do alvo: quem estava logado volta ao login e entra de novo com a senha nova. Cortar
+  acesso é remover o vínculo (`active` é o que a RLS respeita), não trocar senha.
+- Exclusão do vínculo (`removeMember`) bloqueia a si mesmo; redefinição de senha não —
+  no próprio acesso ela vira "trocar minha senha".
 - O e-mail de Auth é sintético (`<digitos>@celular.local`): nunca exibir na UI,
   nem em mensagens de erro/logs. A UI mostra apenas o celular formatado.
 - NUNCA commitar `.env` ou `.env.local`. Segredos apenas em variáveis de ambiente.

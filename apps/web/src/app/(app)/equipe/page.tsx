@@ -28,16 +28,19 @@ export default async function TeamPage() {
         <section className="rounded-2xl border border-line bg-surface p-4">
           <h2 className="font-display text-[19px] text-ink">Acessos</h2>
           <p className="mt-1 text-[13px] text-ink-soft">
-            Exclua quem saiu da equipe: o acesso cai na hora e as notas antigas continuam no caixa.
+            Você define a senha de cada pessoa. Redefina quando precisar e
+            exclua quem saiu: o acesso cai na hora e as notas antigas continuam
+            no caixa.
           </p>
 
           <MembersList
             members={members}
             currentUserId={session.userId}
+            orgName={session.orgName}
           />
         </section>
 
-        <InviteForm />
+        <InviteForm orgName={session.orgName} />
       </div>
     </div>
   );

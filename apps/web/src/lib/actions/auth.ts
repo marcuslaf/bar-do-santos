@@ -1,11 +1,10 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
-
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getSession } from "@/lib/data";
+import { passwordProblem } from "@/lib/password";
 import { normalizePhone, phoneToAuthEmail } from "@/lib/phone";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -18,22 +17,49 @@ const credentialsSchema = z.object({
   password: z.string().min(1, "Informe a senha."),
 });
 
-const inviteSchema = z.object({
-  phone: z.string().trim().min(1, "Informe o celular."),
-  displayName: z
-    .string()
-    .trim()
-    .min(2, "Informe o nome de quem vai usar o app.")
-    .max(60, "Nome muito longo."),
-  role: z.enum(["owner", "staff"]),
-});
+/**
+ * Schema do convite. É uma fábrica porque a política de senha depende do nome
+ * do bar — e ela precisa ver o `phone`/`displayName` já no mesmo objeto para
+ * recusar "celular na senha" e "nome na senha".
+ */
+function inviteSchema(orgName: string) {
+  return z
+    .object({
+      phone: z.string().trim().min(1, "Informe o celular."),
+      displayName: z
+        .string()
+        .trim()
+        .min(2, "Informe o nome de quem vai usar o app.")
+        .max(60, "Nome muito longo."),
+      role: z.enum(["owner", "staff"]),
+      password: z.string().min(1, "Informe a senha."),
+    })
+    .superRefine((data, ctx) => {
+      // A regra completa (comprimento, bytes, previsibilidade) vive em
+      // `lib/password.ts`: o formulário aplica a mesma antes de enviar.
+      const problem = passwordProblem(data.password, {
+        phone: normalizePhone(data.phone),
+        displayName: data.displayName,
+        orgName,
+      });
+
+      if (problem) {
+        ctx.addIssue({ code: "custom", path: ["password"], message: problem });
+      }
+    });
+}
+
+/** Traduz a recusa do GoTrue sem repassar `error.message` cru para a tela. */
+function passwordPolicyFailure(message: string | undefined): ActionResult<never> | null {
+  if (!message) return null;
+  if (/weak|password|pwned|leaked/i.test(message)) {
+    return failure("A senha não atende à política do servidor. Tente outra.");
+  }
+  return null;
+}
 
 function failure(message: string): ActionResult<never> {
   return { ok: false, error: message };
-}
-
-function newTempPassword(): string {
-  return randomBytes(9).toString("base64url");
 }
 
 export async function signIn(input: {
@@ -72,14 +98,15 @@ export async function inviteMember(input: {
   phone: string;
   displayName: string;
   role: MemberRole;
-}): Promise<ActionResult<{ tempPassword: string }>> {
+  password: string;
+}): Promise<ActionResult> {
   const session = await getSession();
   if (!session) return failure("Sessão expirada. Entre novamente.");
   if (session.role !== "owner") {
     return failure("Somente o dono pode criar acessos.");
   }
 
-  const parsed = inviteSchema.safeParse(input);
+  const parsed = inviteSchema(session.orgName).safeParse(input);
   if (!parsed.success) {
     return failure(parsed.error.issues[0]?.message ?? "Dados inválidos.");
   }
@@ -88,11 +115,11 @@ export async function inviteMember(input: {
   if (!digits) return failure(INVALID_PHONE);
 
   const admin = createAdminClient();
-  const tempPassword = newTempPassword();
+  const password = parsed.data.password;
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email: phoneToAuthEmail(digits),
-    password: tempPassword,
+    password,
     email_confirm: true,
     user_metadata: { display_name: parsed.data.displayName },
   });
@@ -113,8 +140,13 @@ export async function inviteMember(input: {
     }
 
     revalidatePath("/equipe");
-    return { ok: true, data: { tempPassword } };
+    return { ok: true };
   }
+
+  // Antes de qualquer dedução de "celular já existe": o GoTrue também responde
+  // 422 para senha fraca, e isso não pode ser confundido com conta duplicada.
+  const policyFailure = passwordPolicyFailure(createError?.message);
+  if (policyFailure) return policyFailure;
 
   const duplicated =
     createError?.status === 422 ||
@@ -200,12 +232,15 @@ export async function inviteMember(input: {
 
     const { error: passwordError } = await admin.auth.admin.updateUserById(
       existingUser.id,
-      { password: tempPassword },
+      { password },
     );
 
     if (passwordError) {
-      return failure(
-        "Não foi possível criar o acesso. Verifique a chave de serviço no servidor.",
+      return (
+        passwordPolicyFailure(passwordError.message) ??
+        failure(
+          "Não foi possível criar o acesso. Verifique a chave de serviço no servidor.",
+        )
       );
     }
 
@@ -239,7 +274,7 @@ export async function inviteMember(input: {
     }
 
     revalidatePath("/equipe");
-    return { ok: true, data: { tempPassword } };
+    return { ok: true };
   }
 
   const currentOrgMember = memberships.find((row) => row.org_id === session.orgId);
@@ -258,16 +293,21 @@ export async function inviteMember(input: {
     return failure("Já existe uma conta com este celular.");
   }
 
-  // Reconvite legítimo: vínculo inativo nesta org. Nova senha temporária no
-  // mesmo usuário do Auth (o e-mail sintético é o mesmo derivado do celular).
+  // Reconvite legítimo: vínculo inativo nesta org. A senha digitada pelo dono
+  // substitui a anterior no mesmo usuário do Auth (o e-mail sintético é o mesmo
+  // derivado do celular) — é também o caminho de "esqueci/redefinir a senha":
+  // excluir o vínculo e criar de novo devolve o acesso com senha nova.
   const { error: passwordError } = await admin.auth.admin.updateUserById(
     currentOrgMember.user_id,
-    { password: tempPassword },
+    { password },
   );
 
   if (passwordError) {
-    return failure(
-      "Não foi possível criar o acesso. Verifique a chave de serviço no servidor.",
+    return (
+      passwordPolicyFailure(passwordError.message) ??
+      failure(
+        "Não foi possível criar o acesso. Verifique a chave de serviço no servidor.",
+      )
     );
   }
 
@@ -285,7 +325,7 @@ export async function inviteMember(input: {
   }
 
   revalidatePath("/equipe");
-  return { ok: true, data: { tempPassword } };
+  return { ok: true };
 }
 
 export async function removeMember(memberId: string): Promise<ActionResult> {
@@ -318,6 +358,123 @@ export async function removeMember(memberId: string): Promise<ActionResult> {
     .eq("id", memberId);
 
   if (error) return failure("Não foi possível excluir o acesso.");
+
+  revalidatePath("/equipe");
+  return { ok: true };
+}
+
+/**
+ * Redefine a senha de um membro ativo deste bar (só o dono). Existe porque a
+ * senha agora é digitada por ele: sem isso, corrigir um erro de digitação
+ * exigiria excluir o vínculo — caminho destrutivo que ainda passa pelo
+ * fallback de contas órfãs.
+ *
+ * Efeito colateral medido em 2026-10-27: `admin.updateUserById({ password })`
+ * revoga os refresh tokens do alvo. Quem estava logado cai em /login no próximo
+ * carregamento — inclusive o dono, quando troca a própria senha. Aqui isso é o
+ * desejado (senha nova encerra sessões antigas), mas não é corte de acesso: o
+ * vínculo continua ativo e a pessoa entra de novo com a senha nova. Cortar
+ * acesso é remover o vínculo, que é o que a RLS respeita.
+ */
+export async function resetMemberPassword(input: {
+  memberId: string;
+  password: string;
+}): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session) return failure("Sessão expirada. Entre novamente.");
+  if (session.role !== "owner") {
+    return failure("Somente o dono pode redefinir senhas.");
+  }
+
+  const parsed = z
+    .object({ memberId: z.string().uuid(), password: z.string().min(1, "Informe a senha.") })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    return failure(parsed.error.issues[0]?.message ?? "Dados inválidos.");
+  }
+
+  const admin = createAdminClient();
+
+  // `org_id` no filtro, não só `id`: um dono não alcança membro de outro bar.
+  const { data: target, error: readError } = await admin
+    .from("org_members")
+    .select("id, user_id, org_id, active, display_name, phone")
+    .eq("id", parsed.data.memberId)
+    .eq("org_id", session.orgId)
+    .maybeSingle<{
+      id: string;
+      user_id: string;
+      org_id: string;
+      active: boolean;
+      display_name: string;
+      phone: string | null;
+    }>();
+
+  if (readError) {
+    return failure(
+      "Não foi possível redefinir a senha. Verifique a chave de serviço no servidor.",
+    );
+  }
+
+  if (!target) return failure("Acesso não encontrado.");
+
+  if (!target.active) {
+    return failure(
+      "Este acesso está inativo. Crie o acesso de novo, com a senha nova.",
+    );
+  }
+
+  const problem = passwordProblem(parsed.data.password, {
+    phone: target.phone,
+    displayName: target.display_name,
+    orgName: session.orgName,
+  });
+
+  if (problem) return failure(problem);
+
+  // Mesmo invariante do convite: nunca trocar a senha de quem tem vínculo
+  // ativo em outro bar.
+  const { data: otherRows, error: otherError } = await admin
+    .from("org_members")
+    .select("id, org_id, active")
+    .eq("user_id", target.user_id)
+    .neq("org_id", session.orgId);
+
+  if (otherError) {
+    return failure(
+      "Não foi possível redefinir a senha. Verifique a chave de serviço no servidor.",
+    );
+  }
+
+  if ((otherRows ?? []).some((row) => row.active)) {
+    return failure("Este celular já está em uso em outro bar.");
+  }
+
+  const { error } = await admin.auth.admin.updateUserById(target.user_id, {
+    password: parsed.data.password,
+  });
+
+  if (error) {
+    return (
+      passwordPolicyFailure(error.message) ??
+      failure(
+        "Não foi possível redefinir a senha. Verifique a chave de serviço no servidor.",
+      )
+    );
+  }
+
+  // Trilha mínima de auditoria: só identificadores, nunca a senha. Não existe
+  // tabela de auditoria de acesso no v1 — isto é rastro de depuração, não
+  // registro de compliance.
+  console.info(
+    JSON.stringify({
+      event: "member.password_reset",
+      orgId: session.orgId,
+      memberId: target.id,
+      actorId: session.userId,
+    }),
+  );
 
   revalidatePath("/equipe");
   return { ok: true };
