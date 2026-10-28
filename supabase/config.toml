@@ -34,6 +34,15 @@ enabled = true
 port = 54323
 api_url = "http://127.0.0.1"
 
+# Logs locais (vector + logflare) desligados: no Docker Desktop o container
+# vector aponta para DOCKER_HOST=http://host.docker.internal:2375 e exige
+# "Expose daemon on tcp://localhost:2375 without TLS" habilitado. Com essa
+# opção desligada (padrão, e o correto por segurança) ele falha ao listar
+# containers, sai com código 0 e entra em restart loop (~a cada 7s).
+# Impacto de desligar: sem logs agregados dentro do Studio local.
+[analytics]
+enabled = false
+
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
