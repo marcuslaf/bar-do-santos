@@ -1,9 +1,11 @@
 "use server";
 
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getSession } from "@/lib/data";
+import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
 import { passwordProblem } from "@/lib/password";
 import { normalizePhone, phoneToAuthEmail } from "@/lib/phone";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,6 +13,22 @@ import { createClient } from "@/lib/supabase/server";
 import type { ActionResult, MemberRole } from "@/lib/types";
 
 const INVALID_PHONE = "Informe um celular válido com DDD.";
+
+/**
+ * Client efêmero, sem cookies e sem persistência: confere a senha atual com
+ * `signInWithPassword` sem tocar na sessão do navegador. Usar o client de
+ * cookies aqui rotacionaria os tokens no meio da action, e a sessão emitida
+ * para checar a senha morre junto com este objeto.
+ */
+function createPasswordCheckClient() {
+  return createSupabaseClient(supabaseUrl(), supabaseAnonKey(), {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
 
 const credentialsSchema = z.object({
   phone: z.string().trim().min(1, "Informe o celular."),
@@ -419,6 +437,15 @@ export async function resetMemberPassword(input: {
 
   if (!target) return failure("Acesso não encontrado.");
 
+  /*
+   * O dono também tem uma senha, e redefinir a própria por aqui passaria por
+   * cima da conferência da senha atual — o atalho que anula a proteção do
+   * fluxo "Minha senha". O caminho dele é o mesmo de todo mundo.
+   */
+  if (target.user_id === session.userId) {
+    return failure("Para trocar a sua própria senha, use «Minha senha».");
+  }
+
   if (!target.active) {
     return failure(
       "Este acesso está inativo. Crie o acesso de novo, com a senha nova.",
@@ -477,5 +504,173 @@ export async function resetMemberPassword(input: {
   );
 
   revalidatePath("/equipe");
+  return { ok: true };
+}
+
+/** Espelha a janela de `public.register_password_failure` (migration 20261027140000). */
+const PASSWORD_ATTEMPTS_MAX = 5;
+const PASSWORD_ATTEMPTS_WINDOW_MS = 15 * 60 * 1000;
+const PASSWORD_ATTEMPTS_BLOCKED =
+  "Muitas tentativas com a senha atual. Aguarde alguns minutos e tente de novo.";
+
+/**
+ * Troca a senha do próprio membro logado ("minha senha"). Existe para o dono
+ * deixar de ser o único que conhece a senha de todo mundo: cada pessoa passa a
+ * poder guardar a sua.
+ *
+ * Pede a senha atual de propósito. O aparelho do bar fica destravado no balcão,
+ * e sem essa checagem qualquer um que pegue o celular trocaria a senha e
+ * trancaria o dono para fora — o único cenário que esta feature cria.
+ *
+ * A conferência da senha atual usa `signInWithPassword` num client efêmero
+ * (a Admin API não valida senha sem emitir sessão). Como no deploy essas
+ * chamadas saem do servidor, o rate limit do GoTrue é compartilhado por toda a
+ * equipe; por isso o contador em `password_attempts` entra antes, por usuário.
+ */
+export async function changeOwnPassword(input: {
+  currentPassword: string;
+  password: string;
+}): Promise<ActionResult> {
+  const session = await getSession();
+  if (!session) return failure("Sessão expirada. Entre novamente.");
+
+  const parsed = z
+    .object({
+      currentPassword: z
+        .string()
+        .min(1, "Informe a senha atual.")
+        .max(200, "Senha muito longa."),
+      password: z.string().min(1, "Informe a senha nova.").max(200, "Senha muito longa."),
+    })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    return failure(parsed.error.issues[0]?.message ?? "Dados inválidos.");
+  }
+
+  const problem = passwordProblem(parsed.data.password, {
+    phone: session.phone,
+    displayName: session.displayName,
+    orgName: session.orgName,
+  });
+
+  if (problem) return failure(problem);
+
+  if (parsed.data.password === parsed.data.currentPassword) {
+    return failure("A senha nova precisa ser diferente da atual.");
+  }
+
+  const admin = createAdminClient();
+
+  // Freio por usuário: sem ele, errar a senha atual várias vezes gasta o balde
+  // de sign-in do GoTrue, que no deploy é o mesmo para o bar inteiro.
+  const { data: attempt } = await admin
+    .from("password_attempts")
+    .select("failures, window_started_at")
+    .eq("user_id", session.userId)
+    .maybeSingle<{ failures: number; window_started_at: string }>();
+
+  if (attempt && attempt.failures >= PASSWORD_ATTEMPTS_MAX) {
+    const startedAt = Date.parse(attempt.window_started_at);
+    const inWindow =
+      Number.isFinite(startedAt) && Date.now() - startedAt < PASSWORD_ATTEMPTS_WINDOW_MS;
+
+    if (inWindow) {
+      console.info(
+        JSON.stringify({
+          event: "member.password_change_throttled",
+          orgId: session.orgId,
+          userId: session.userId,
+          failures: attempt.failures,
+        }),
+      );
+      return failure(PASSWORD_ATTEMPTS_BLOCKED);
+    }
+  }
+
+  // O client com cookies é o que tem a sessão do navegador e é ele que faz o
+  // `updateUser` — é assim que a sessão atual sobrevive à troca.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.email) return failure("Sessão expirada. Entre novamente.");
+
+  const checker = createPasswordCheckClient();
+  const { error: verifyError } = await checker.auth.signInWithPassword({
+    email: user.email,
+    password: parsed.data.currentPassword,
+  });
+
+  if (verifyError) {
+    if (verifyError.status === 429) {
+      return failure("Muitas tentativas no servidor. Aguarde um minuto e tente de novo.");
+    }
+
+    const { data: failures } = await admin.rpc("register_password_failure", {
+      p_user_id: session.userId,
+    });
+
+    if (typeof failures === "number" && failures >= PASSWORD_ATTEMPTS_MAX) {
+      console.info(
+        JSON.stringify({
+          event: "member.password_change_throttled",
+          orgId: session.orgId,
+          userId: session.userId,
+          failures,
+        }),
+      );
+      return failure(PASSWORD_ATTEMPTS_BLOCKED);
+    }
+
+    return failure("Senha atual incorreta.");
+  }
+
+  /*
+   * `scope: "local"` é obrigatório aqui: o padrão do `signOut()` é **global**,
+   * que revogaria também a sessão do navegador — a pessoa sairia de todos os
+   * aparelhos ao trocar a senha, inclusive deste.
+   */
+  await checker.auth.signOut({ scope: "local" });
+
+  const { error } = await supabase.auth.updateUser({
+    password: parsed.data.password,
+  });
+
+  if (error) {
+    // `passwordPolicyFailure` casa qualquer mensagem com "password"; os dois
+    // casos legítimos de `updateUser` precisam ser tratados por código antes.
+    if (error.code === "same_password") {
+      return failure("A senha nova precisa ser diferente da atual.");
+    }
+    if (error.code === "current_password_mismatch") {
+      return failure("Senha atual incorreta.");
+    }
+    if (error.code === "reauthentication_needed") {
+      return failure("Confirme a senha atual de novo e tente outra vez.");
+    }
+    if (error.status === 401) {
+      return failure("Sessão expirada. Entre novamente.");
+    }
+
+    return (
+      passwordPolicyFailure(error.message) ??
+      failure("Não foi possível trocar a senha. Tente de novo.")
+    );
+  }
+
+  // Sucesso zera o freio: quem acertou a senha não deve herdar o bloqueio.
+  await admin.from("password_attempts").delete().eq("user_id", session.userId);
+
+  // Mesma trilha mínima do reset: identificadores, nunca a senha.
+  console.info(
+    JSON.stringify({
+      event: "member.password_changed",
+      orgId: session.orgId,
+      actorId: session.userId,
+    }),
+  );
+
   return { ok: true };
 }

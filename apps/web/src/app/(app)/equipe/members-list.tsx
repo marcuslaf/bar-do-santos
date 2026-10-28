@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 
@@ -12,7 +13,7 @@ import {
   IconSpinner,
 } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
-import { errorBoxClass, inputClass, labelClass } from "@/components/ui/styles";
+import { buttonClass, errorBoxClass, inputClass, labelClass } from "@/components/ui/styles";
 import { removeMember, resetMemberPassword } from "@/lib/actions/auth";
 import { initials } from "@/lib/format";
 import { PASSWORD_MIN_LENGTH, passwordProblem } from "@/lib/password";
@@ -133,14 +134,9 @@ export function MembersList({
         return;
       }
 
-      const isSelf = member.user_id === currentUserId;
       closeReset();
       setDoneId(member.id);
-      setAnnouncement(
-        isSelf
-          ? "Sua senha foi redefinida."
-          : `Senha de ${member.display_name} redefinida.`,
-      );
+      setAnnouncement(`Senha de ${member.display_name} redefinida.`);
       router.refresh();
     } catch {
       setResetError("Falha de conexão. Tente novamente.");
@@ -157,7 +153,6 @@ export function MembersList({
     );
   }
 
-  const resetIsSelf = resetTarget !== null && resetTarget.user_id === currentUserId;
   const resetPhone = resetTarget?.phone ? formatPhone(resetTarget.phone) : null;
 
   return (
@@ -254,20 +249,31 @@ export function MembersList({
                     </span>
                   ) : null}
 
-                  <Button
-                    variant="ghost"
-                    size="compact"
-                    onClick={() => openReset(member)}
-                    disabled={pending || resetPending}
-                    aria-label={
-                      isSelf
-                        ? undefined
-                        : `Redefinir senha de ${member.display_name}`
-                    }
-                    className="shrink-0"
-                  >
-                    {isSelf ? "Trocar senha" : "Redefinir senha"}
-                  </Button>
+                  {/*
+                   * A própria senha não é redefinida por aqui: `resetMemberPassword`
+                   * recusa o alvo igual ao usuário logado, porque redefinir a
+                   * própria sem conferir a senha atual anularia a proteção do
+                   * fluxo verificado (o celular do balcão fica destravado).
+                   */}
+                  {isSelf ? (
+                    <Link
+                      href="/minha-senha"
+                      className={buttonClass({ variant: "ghost", size: "compact" })}
+                    >
+                      Minha senha
+                    </Link>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="compact"
+                      onClick={() => openReset(member)}
+                      disabled={pending || resetPending}
+                      aria-label={`Redefinir senha de ${member.display_name}`}
+                      className="shrink-0"
+                    >
+                      Redefinir senha
+                    </Button>
+                  )}
 
                   {isSelf ? null : (
                     <Button
@@ -302,11 +308,7 @@ export function MembersList({
               {showDone ? (
                 <p className="mt-1.5 flex items-start gap-2 text-[13px] leading-snug text-ok">
                   <IconCheckCircle size={17} className="mt-px shrink-0" />
-                  <span>
-                    {isSelf
-                      ? "Sua senha foi redefinida."
-                      : `Senha de ${member.display_name} redefinida.`}
-                  </span>
+                  <span>{`Senha de ${member.display_name} redefinida.`}</span>
                 </p>
               ) : null}
             </li>
@@ -366,24 +368,17 @@ export function MembersList({
             if (resetPendingId) return;
             closeReset();
           }}
-          title={resetIsSelf ? "Trocar sua senha?" : "Redefinir senha?"}
+          title="Redefinir senha?"
           /*
            * O aviso sobre sessão fica na `description`: além de aparecer sob o
            * título, entra no `aria-describedby` do diálogo, então é lido na
            * abertura — antes de a pessoa digitar.
            *
-           * O briefing pedia "a sessão que já está aberta continua valendo",
-           * mas a medição no stack real (Supabase local) mostra o contrário:
            * `admin.updateUserById({ password })` revoga os refresh tokens do
-           * alvo — quem estava no app cai no próximo carregamento, e no próprio
-           * acesso isso acontece na hora (o dono é jogado para /login). A copy
-           * abaixo diz o que acontece, não o que se esperava.
+           * alvo: quem estava no app cai no próximo carregamento. A copy abaixo
+           * diz o que acontece, não o que se esperava.
            */
-          description={
-            resetIsSelf
-              ? "Vale no próximo login. Você sai deste aparelho e entra de novo com ela."
-              : "Vale no próximo login. Quem já estava no app vai precisar entrar de novo com ela."
-          }
+          description="Vale no próximo login. Quem já estava no app vai precisar entrar de novo com ela."
           footer={
             <>
               <Button
@@ -422,29 +417,16 @@ export function MembersList({
             className="space-y-4"
           >
             <p className="text-[15px] leading-relaxed break-words text-pretty text-ink-soft">
-              {resetIsSelf ? (
-                resetPhone ? (
-                  <>
-                    Você entra com o celular{" "}
-                    <span className="whitespace-nowrap">{resetPhone}</span>.
-                  </>
-                ) : (
-                  "Senha nova para o seu acesso."
-                )
-              ) : (
+              Senha nova para{" "}
+              <strong className="font-semibold text-ink">
+                {resetTarget.display_name}
+              </strong>
+              {resetPhone ? (
                 <>
-                  Senha nova para{" "}
-                  <strong className="font-semibold text-ink">
-                    {resetTarget.display_name}
-                  </strong>
-                  {resetPhone ? (
-                    <>
-                      , que entra com o celular{" "}
-                      <span className="whitespace-nowrap">{resetPhone}</span>.
-                    </>
-                  ) : null}
+                  , que entra com o celular{" "}
+                  <span className="whitespace-nowrap">{resetPhone}</span>.
                 </>
-              )}
+              ) : null}
             </p>
 
             <div>
@@ -506,13 +488,11 @@ export function MembersList({
               </div>
             ) : null}
 
-            {resetIsSelf ? null : (
-              <p className="text-[13px] leading-relaxed text-ink-soft">
-                Entregue a senha nova à pessoa: a antiga para de funcionar. Ela
-                continua na equipe — para cortar o acesso de vez, use{" "}
-                <strong className="font-semibold text-ink">Excluir</strong>.
-              </p>
-            )}
+            <p className="text-[13px] leading-relaxed text-ink-soft">
+              Entregue a senha nova à pessoa: a antiga para de funcionar. Ela
+              continua na equipe — para cortar o acesso de vez, use{" "}
+              <strong className="font-semibold text-ink">Excluir</strong>.
+            </p>
           </form>
         </Modal>
       ) : null}

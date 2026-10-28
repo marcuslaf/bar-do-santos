@@ -27,6 +27,8 @@ export interface Session {
   role: MemberRole;
   orgId: string;
   orgName: string;
+  /** Celular de acesso (só dígitos, DDD incluso). Null em vínculo legado. */
+  phone: string | null;
   timezone: string;
   dayCutoffHour: number;
 }

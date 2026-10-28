@@ -6,6 +6,7 @@ import type { Member, Order, Session } from "@/lib/types";
 interface MemberRow {
   role: "owner" | "staff";
   display_name: string;
+  phone: string | null;
   org_id: string;
   orgs:
     | { name: string; timezone: string; day_cutoff_hour: number }
@@ -29,7 +30,7 @@ export const getSession = cache(async (): Promise<Session | null> => {
 
   const { data, error } = await supabase
     .from("org_members")
-    .select("role, display_name, org_id, orgs(name, timezone, day_cutoff_hour)")
+    .select("role, display_name, phone, org_id, orgs(name, timezone, day_cutoff_hour)")
     .eq("user_id", user.id)
     .eq("active", true)
     .maybeSingle<MemberRow>();
@@ -44,6 +45,7 @@ export const getSession = cache(async (): Promise<Session | null> => {
     role: data.role,
     orgId: data.org_id,
     orgName: org?.name ?? "Bar do Santos",
+    phone: data.phone ?? null,
     timezone: org?.timezone ?? "America/Sao_Paulo",
     dayCutoffHour: org?.day_cutoff_hour ?? 4,
   };

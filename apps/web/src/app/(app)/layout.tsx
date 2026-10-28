@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { AccountLink } from "@/components/app-shell/account-link";
 import { BottomNav } from "@/components/app-shell/bottom-nav";
 import { HeaderNav } from "@/components/app-shell/header-nav";
 import { SignOutButton } from "@/components/app-shell/sign-out-button";
@@ -48,13 +49,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
       <header className="sticky top-0 z-20 border-b border-line bg-paper/92 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
         <div className="mx-auto flex h-14 w-full max-w-3xl items-center gap-3 px-4 [@media(max-height:30rem)]:h-12">
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-display text-[17px] leading-tight text-ink">
-              {session.orgName}
-            </p>
-            <p className="truncate text-[12px] leading-tight text-ink-soft [@media(max-height:30rem)]:hidden">
-              {subtitle}
-            </p>
+          {/*
+           * O bloco de identidade é também a entrada da conta: em 320px o
+           * header comporta dois controles à direita (tema + "Sair"), e é este
+           * bloco — 44px de alvo, sem largura nova — que leva a /minha-senha.
+           * A linha "Nome · Papel" deixou de sumir em altura curta: ela é a
+           * affordance do link, não sobra de layout.
+           */}
+          <div className="flex min-w-0 flex-1 items-center">
+            <AccountLink orgName={session.orgName} subtitle={subtitle} />
           </div>
 
           <HeaderNav role={session.role} />

@@ -53,8 +53,16 @@ login → lista do dia → "+ Nova nota" (2 campos) → salvar
 5. **`/caixa`** — total pago, em aberto, por forma de pagamento e por operador.
 6. **`/equipe`** — só o dono: criar acesso por celular definindo a senha da pessoa,
    redefinir a senha de quem já tem acesso, excluir quem saiu e ver o número de cada um.
+   A própria senha não é redefinida aqui: o dono usa `/minha-senha` como todo mundo.
    *Owner only: create an account by phone number and set the person's password, reset
-   an existing member's password, remove members who left and see each member's number.*
+   an existing member's password, remove members who left and see each member's number.
+   The owner's own password is not reset here — they use `/minha-senha` like everyone.*
+7. **`/minha-senha`** — qualquer membro logado troca a própria senha. Pede a senha
+   atual, confere a política e derruba as sessões dos outros aparelhos; o aparelho em
+   uso continua conectado.
+   *Any signed-in member changes their own password. It asks for the current password,
+   enforces the policy and ends the sessions on other devices; the current device stays
+   signed in.*
 
 ---
 
@@ -197,34 +205,32 @@ docs/
 
 - **Single-org**: uma instância por estabelecimento. Multi-tenant exigiria seletor de org.
 - **Sem cardápio**: o pedido é texto livre; não há total automático por item.
-- **Senha definida pelo dono**: não há fluxo de "esqueci a senha" (o e-mail do Auth é
-  sintético e não recebe mensagens). O dono redefine a senha de um membro ativo na tela
-  Equipe — e redefinir **encerra as sessões abertas** da pessoa (ela cai no login e entra
-  com a senha nova). Para cortar o acesso de vez, remova o vínculo.
-  *The password is set by the owner; there is no "forgot password" flow (the Auth email
-  is synthetic and receives no mail). The owner resets an active member's password on the
-  Team screen — and a reset **ends that person's open sessions** (they land on the login
-  screen and sign in with the new password). To cut access for good, remove the
-  membership.*
-- **O dono conhece as senhas da equipe**: é consequência de ele cadastrá-las. Isso
+- **Sem "esqueci a senha"**: o e-mail do Auth é sintético e não recebe mensagens. Quem
+  não lembra a senha atual pede ao dono para redefinir na tela Equipe — o que **encerra
+  as sessões abertas** da pessoa (ela cai no login e entra com a senha nova). Para cortar
+  o acesso de vez, remova o vínculo.
+  *There is no "forgot password" flow: the Auth email is synthetic and receives no mail.
+  Whoever does not remember the current password asks the owner to reset it on the Team
+  screen — which **ends that person's open sessions** (they land on the login screen and
+  sign in with the new password). To cut access for good, remove the membership.*
+- **O dono ainda conhece as senhas que criou**: é consequência de ele cadastrá-las. Isso
   significa senha possivelmente compartilhada e que a autoria das notas
   (`orders.created_by`) deixa de ter valor probatório — o dono pode se passar por
-  qualquer membro. Risco aceito no v1; o mitigador real é autoatendimento de troca de
-  senha (roadmap).
-  *The owner knows the team's passwords — a consequence of setting them. That means
-  possibly shared passwords and that note authorship (`orders.created_by`) is no longer
-  probative: the owner can impersonate any member. Accepted risk in v1; self-service
-  password change is the real mitigation (roadmap).*
+  qualquer membro. O mitigador é `/minha-senha`: cada pessoa troca a sua sem depender
+  dele (e a troca derruba as sessões antigas).
+  *The owner still knows the passwords they created — a consequence of setting them.
+  That means possibly shared passwords and that note authorship (`orders.created_by`) is
+  no longer probative: the owner can impersonate any member. The mitigation is
+  `/minha-senha`: each person changes their own password without depending on the owner
+  (and the change ends older sessions).*
 - **Sem impressão térmica** na v1.
 - **Realtime** degrada para atualização manual se o serviço estiver indisponível; há polling de 20s como rede de segurança.
 
 ### Roadmap
-1. Troca de senha pelo próprio membro, logado ("minha senha") — tira do dono o papel de
-   guardião das senhas de todos.
-2. Recuperação de senha pelo celular (SMS/WhatsApp). Hoje o dono já redefine a senha na
+1. Recuperação de senha pelo celular (SMS/WhatsApp). Hoje o dono redefine a senha na
    tela Equipe; o que falta é o caminho sem depender dele.
-3. Cardápio opcional com preço por item (sem perder a captura em 2 campos).
-4. Exportação do caixa (CSV) e impressão de comanda.
+2. Cardápio opcional com preço por item (sem perder a captura em 2 campos).
+3. Exportação do caixa (CSV) e impressão de comanda.
 
 ---
 

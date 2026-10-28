@@ -37,7 +37,7 @@ pwsh scripts/validate-agents.ps1 -Strict
 ## Estrutura
 ```text
 apps/web/src/
-├── app/                 # rotas (login, lista, nova, nota/[id], caixa, equipe)
+├── app/                 # rotas (login, lista, nova, nota/[id], caixa, equipe, minha-senha)
 ├── components/          # UI (client components)
 ├── lib/
 │   ├── actions/         # Server Actions (orders, auth)
@@ -60,6 +60,8 @@ supabase/
 - `orders` — a nota: `customer_name`, `description`, `status`, `total_cents`,
   `payment_method`, carimbos de entrega/pagamento/cancelamento, `day_key`.
 - `order_events` — trilha append-only de toda mudança de estado.
+- `password_attempts` — contador de falhas de senha atual por usuário (5 em 15 min).
+  Sem policy: acesso só pela service role, usado por `changeOwnPassword`.
 - `orders_view` — `orders` + nomes de autor/pagador/cancelador.
 
 ## Regras de negócio
@@ -82,8 +84,15 @@ supabase/
 - Redefinir senha (`resetMemberPassword`) usa `updateUserById`, que **revoga as sessões**
   do alvo: quem estava logado volta ao login e entra de novo com a senha nova. Cortar
   acesso é remover o vínculo (`active` é o que a RLS respeita), não trocar senha.
-- Exclusão do vínculo (`removeMember`) bloqueia a si mesmo; redefinição de senha não —
-  no próprio acesso ela vira "trocar minha senha".
+- Exclusão do vínculo (`removeMember`) bloqueia a si mesmo, e `resetMemberPassword`
+  **recusa o alvo igual ao usuário logado**: a própria senha só muda em `/minha-senha`.
+- `changeOwnPassword` ("Minha senha") exige a **senha atual** — o aparelho do balcão fica
+  destravado e sem essa checagem qualquer um trocaria a senha e trancaria o dono para
+  fora. A conferência usa `signInWithPassword` num client **efêmero** (sem cookies): o
+  client com cookies só faz o `updateUser`, que rotaciona a sessão atual e derruba as
+  outras. Falhas de senha atual são contadas por usuário em `public.password_attempts`
+  (5 em 15 min, service role) porque o rate limit do GoTrue conta por IP do servidor e é
+  compartilhado pela equipe. Não aplicar a política de senha à senha atual.
 - O e-mail de Auth é sintético (`<digitos>@celular.local`): nunca exibir na UI,
   nem em mensagens de erro/logs. A UI mostra apenas o celular formatado.
 - NUNCA commitar `.env` ou `.env.local`. Segredos apenas em variáveis de ambiente.
