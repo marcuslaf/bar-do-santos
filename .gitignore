@@ -129,3 +129,6 @@ pnpm-debug.log*
 
 # Tooling local de agentes (não faz parte do projeto)
 .agents/rules/
+
+# Artefatos do Playwright MCP (screenshots/logs de verificacao)
+.playwright-mcp/
