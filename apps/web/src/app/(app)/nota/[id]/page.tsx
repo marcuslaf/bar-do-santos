@@ -27,6 +27,8 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
 
   const timeZone = session.timezone;
   const editable = order.status === "aberto" || order.status === "entregue";
+  const manageable =
+    order.status === "pago" || order.status === "cancelado";
 
   return (
     <div>
@@ -143,7 +145,7 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
           </div>
         </div>
 
-        {editable ? (
+        {(editable || manageable) ? (
           <div className="[@media(min-width:40rem)]:sticky [@media(min-width:40rem)]:top-[4.5rem]">
             <OrderActions order={order} role={session.role} />
           </div>

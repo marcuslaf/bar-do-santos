@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getSession } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/lib/types";
 
 const MAX_MONEY_CENTS = 100_000_00;
@@ -175,6 +176,18 @@ export async function cancelOrder(id: string, reason: string): Promise<ActionRes
     .from("orders")
     .update({ status: "cancelado", cancel_reason: parsed.data.reason })
     .eq("id", id);
+
+  if (error) return dbFailure(error);
+
+  refresh(id);
+  return { ok: true };
+}
+
+export async function deleteOrder(id: string): Promise<ActionResult> {
+  if (!id) return failure("Pedido inválido");
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("orders").delete().eq("id", id);
 
   if (error) return dbFailure(error);
 

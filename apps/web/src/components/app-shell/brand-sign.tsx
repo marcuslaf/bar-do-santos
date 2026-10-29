@@ -20,14 +20,26 @@ import Image from "next/image";
  */
 export function BrandSign({ className = "" }: { className?: string }) {
   return (
-    <Image
-      src="/brand/logo-bar-do-santos.png"
-      alt="Bar do Santos"
-      width={800}
-      height={250}
-      priority
-      sizes="(min-width: 1024px) 352px, (min-width: 768px) 224px, (min-width: 640px) 176px, 100vw"
-      className={`block h-auto max-w-full rounded-[4px] ${className}`}
-    />
+    <>
+      <Image
+        src="/brand/logo-bar-do-santos.png"
+        alt="Bar do Santos"
+        width={800}
+        height={250}
+        priority
+        sizes="(min-width: 1024px) 352px, (min-width: 768px) 224px, (min-width: 640px) 176px, 100vw"
+        className={`block h-auto max-w-full rounded-[4px] ${className}`}
+      />
+      {/* Se a tela for muito curta » mini‑logo */}
+      <Image
+        src="/brand/logo-bar-do-santos-sm.png"
+        alt="Bar do Santos"
+        width={120}
+        height={37.5}
+        priority
+        sizes="(max-height:22rem) 80px"
+        className="block w-[120px] h-[37.5px] rounded-[4px] hidden [@media(max-height:22rem)]:block"
+      />
+    </>
   );
 }

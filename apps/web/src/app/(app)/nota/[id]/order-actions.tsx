@@ -12,10 +12,11 @@ import {
   IconCheck,
   IconPencil,
   IconSpinner,
+  IconX,
 } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
 import { errorBoxClass, inputClass, labelClass } from "@/components/ui/styles";
-import { cancelOrder, deliverOrder, payOrder, updateOrder } from "@/lib/actions/orders";
+import { cancelOrder, deleteOrder, deliverOrder, payOrder, updateOrder } from "@/lib/actions/orders";
 import { formatCents } from "@/lib/format";
 import {
   PAYMENT_METHOD_LABEL,
@@ -42,7 +43,9 @@ export function OrderActions({ order, role }: OrderActionsProps) {
   const [payOpen, setPayOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [delivering, setDelivering] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function handleDeliver() {
@@ -116,10 +119,20 @@ export function OrderActions({ order, role }: OrderActionsProps) {
         </Button>
 
         {role === "owner" ? (
-          <Button variant="dangerGhost" onClick={() => setCancelOpen(true)}>
-            <IconBan size={18} />
-            Cancelar
-          </Button>
+          <>
+            {(order.status === "aberto" || order.status === "entregue") && (
+              <Button variant="dangerGhost" onClick={() => setCancelOpen(true)}>
+                <IconBan size={18} />
+                Cancelar
+              </Button>
+            )}
+            {(order.status === "pago" || order.status === "cancelado") && (
+              <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+                <IconX size={18} />
+                Excluir
+              </Button>
+            )}
+          </>
         ) : null}
       </div>
 
@@ -131,6 +144,10 @@ export function OrderActions({ order, role }: OrderActionsProps) {
       ) : null}
       {cancelOpen ? (
         <CancelDialog order={order} onClose={() => setCancelOpen(false)} />
+      ) : null}
+
+      {deleteOpen ? (
+        <DeleteDialog order={order} open={deleteOpen} onClose={() => setDeleteOpen(false)} />
       ) : null}
     </section>
   );
@@ -297,7 +314,7 @@ function EditDialog({ order, onClose }: { order: Order; onClose: () => void }) {
       open
       onClose={onClose}
       title="Editar nota"
-      description="Só é possível editar notas em aberto ou entregues."
+      description="Altere o nome do cliente, a descrição ou o valor da nota."
       footer={
         <>
           <Button
@@ -478,6 +495,86 @@ function CancelDialog({
       />
       <p className="mt-1 text-[13px] text-ink-soft">
         O motivo fica registrado no fechamento do caixa.
+      </p>
+    </Modal>
+  );
+}
+
+function DeleteDialog({
+  order,
+  open,
+  onClose,
+}: {
+  order: Order;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleConfirm() {
+    if (deleting) return;
+    setError(null);
+    setDeleting(true);
+
+    try {
+      const result = await deleteOrder(order.id);
+      if (!result.ok) {
+        setError(result.error ?? "Não foi possível excluir a nota.");
+        return;
+      }
+      onClose();
+      router.push("/");
+    } catch {
+      setError("Falha de conexão. Tente novamente.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Excluir nota"
+      description={`A nota de ${order.customer_name} será permanentemente removida.`}
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={onClose}
+            disabled={deleting}
+          >
+            Manter nota
+          </Button>
+          <Button
+            variant="danger"
+            className="flex-1"
+            onClick={handleConfirm}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <>
+                <IconSpinner size={18} />
+                Excluindo…
+              </>
+            ) : (
+              "Excluir nota"
+            )}
+          </Button>
+        </>
+      }
+    >
+      {error ? (
+        <div role="alert" aria-live="assertive" className={`${errorBoxClass} mb-4`}>
+          <IconAlert size={18} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+      <p className="text-[13px] text-ink-soft">
+        Esta ação não pode ser desfeita. O pedido será removido do sistema.
       </p>
     </Modal>
   );
