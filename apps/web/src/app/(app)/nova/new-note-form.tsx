@@ -178,7 +178,7 @@ export function NewNoteForm({
 
     setItems((current) => [...current, itemFromForm(nextItemKey())]);
     resetItemForm();
-    setItemNameOpen(false);
+    setItemNameOpen(true);
     itemNameRef.current?.focus();
   }
 
@@ -199,9 +199,14 @@ export function NewNoteForm({
     }
 
     // Item digitado mas não adicionado à lista: inclui se estiver completo.
+    // Considera item pendente se QUALQUER campo do item estiver preenchido
+    // (nome, prato, valor ou baião), não apenas quando o campo nome está aberto.
     let submittedItems = items;
     const hasPendingItem =
-      itemNameOpen && (itemName.trim().length > 0 || itemValueCents !== null);
+      itemName.trim().length > 0 ||
+      itemDishTagId !== "" ||
+      itemValueCents !== null ||
+      itemBaiao !== "nao";
 
     if (hasPendingItem) {
       if (!itemName.trim() || itemValueCents === null) {
