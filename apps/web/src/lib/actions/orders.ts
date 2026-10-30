@@ -247,7 +247,7 @@ export async function deleteOrder(id: string): Promise<ActionResult> {
 
   if (error) {
     console.error("[deleteOrder] erro ao excluir:", error);
-    return failure("Não foi possível excluir a nota. Verifique se você é o dono do restaurante.");
+    return failure(`Falha ao excluir: ${error.message}`);
   }
 
   refresh(id);
