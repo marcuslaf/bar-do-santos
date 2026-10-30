@@ -121,7 +121,7 @@ export async function createOrder(input: {
     .from("orders")
     .insert({
       customer_name: parsed.data.customerName,
-      description: parsed.data.description,
+      description: parsed.data.description || null,
       total_cents: totalCents,
     })
     .select("id")
@@ -166,7 +166,7 @@ export async function updateOrder(
     .from("orders")
     .update({
       customer_name: parsed.data.customerName,
-      description: parsed.data.description,
+      description: parsed.data.description || null,
       total_cents: parsed.data.totalCents,
     })
     .eq("id", id);
