@@ -162,8 +162,21 @@ export function NewNoteForm({
     setItemError(null);
   }
 
+  function getDishNameById(id: string): string | undefined {
+    return dishTags.find((tag) => tag.id === id)?.name;
+  }
+
   function handleAddItem() {
-    const name = itemName.trim();
+    let name = itemName.trim();
+
+    // Se nome vazio mas prato selecionado, usa nome do prato
+    if (!name && itemDishTagId) {
+      const dishName = getDishNameById(itemDishTagId);
+      if (dishName) {
+        setItemName(dishName);
+        name = dishName;
+      }
+    }
 
     if (!name) {
       setItemError("Informe o nome do item.");
@@ -201,6 +214,12 @@ export function NewNoteForm({
     // Item digitado mas não adicionado à lista: inclui se estiver completo.
     // Considera item pendente se QUALQUER campo do item estiver preenchido
     // (nome, prato, valor ou baião), não apenas quando o campo nome está aberto.
+    // Se nome vazio mas prato selecionado, usa nome do prato.
+    if (!itemName.trim() && itemDishTagId) {
+      const dishName = dishTags.find((t) => t.id === itemDishTagId)?.name;
+      if (dishName) setItemName(dishName);
+    }
+
     let submittedItems = items;
     const hasPendingItem =
       itemName.trim().length > 0 ||
