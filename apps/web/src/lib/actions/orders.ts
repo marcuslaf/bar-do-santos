@@ -40,15 +40,21 @@ const createSchema = z.object({
   description: z
     .string()
     .trim()
-    .min(1, "Escreva o pedido.")
-    .max(2000, "Pedido muito longo (máx. 2000)."),
+    .max(2000, "Observações muito longas (máx. 2000).")
+    .optional()
+    .default(""),
   totalCents: moneySchema.nullable().optional(),
   items: z.array(itemSchema).optional(),
 });
 
 const updateSchema = z.object({
   customerName: z.string().trim().min(1, "Informe o nome do cliente.").max(80),
-  description: z.string().trim().min(1, "Escreva o pedido.").max(2000),
+  description: z
+    .string()
+    .trim()
+    .max(2000, "Observações muito longas (máx. 2000).")
+    .optional()
+    .default(""),
   totalCents: moneySchema.nullable(),
 });
 
