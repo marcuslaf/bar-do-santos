@@ -236,6 +236,12 @@ export async function cancelOrder(id: string, reason: string): Promise<ActionRes
 export async function deleteOrder(id: string): Promise<ActionResult> {
   if (!id) return failure("Pedido inválido");
 
+  const session = await getSession();
+  if (!session) return failure("Sessão expirada. Entre novamente.");
+  if (session.role !== "owner") {
+    return failure("Somente o dono pode excluir notas.");
+  }
+
   const supabase = createAdminClient();
   const { error } = await supabase.from("orders").delete().eq("id", id);
 
