@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { IconArrowLeft } from "@/components/ui/icons";
+import { createClient } from "@/lib/supabase/server";
 
-import { NewNoteForm } from "./new-note-form";
+import { NewNoteForm, type DishTagOption } from "./new-note-form";
 
 export const metadata: Metadata = {
   title: "Nova nota",
@@ -19,6 +20,12 @@ export default async function NewNotePage({
   const params = await searchParams;
   const rawError = Array.isArray(params.erro) ? params.erro[0] : params.erro;
   const initialError = rawError ? rawError.slice(0, 200) : null;
+
+  const supabase = await createClient();
+  const { data: dishTags } = await supabase
+    .from("dish_tags")
+    .select("id, name")
+    .order("name", { ascending: true });
 
   return (
     <div>
@@ -43,10 +50,13 @@ export default async function NewNotePage({
       </div>
 
       <p className="mt-1.5 text-[13px] text-ink-soft [@media(max-height:30rem)]:hidden [@media(max-width:22.5rem)]:hidden">
-        Nome do cliente, pedido e salvar. O valor é opcional.
+        Nome do cliente, pedido e salvar. Os itens e o valor são opcionais.
       </p>
 
-      <NewNoteForm initialError={initialError} />
+      <NewNoteForm
+        initialError={initialError}
+        dishTags={(dishTags ?? []) as DishTagOption[]}
+      />
     </div>
   );
 }

@@ -6,9 +6,15 @@ import { IconArrowLeft, IconClock } from "@/components/ui/icons";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getOrder, getSession } from "@/lib/data";
 import { formatCents, formatDate, formatTime, initials } from "@/lib/format";
+import { createClient } from "@/lib/supabase/server";
 import { PAYMENT_METHOD_LABEL } from "@/lib/types";
 
-import { OrderActions } from "./order-actions";
+import {
+  OrderActions,
+  OrderItems,
+  type DishTagOption,
+  type OrderItem,
+} from "./order-actions";
 
 export const metadata: Metadata = {
   title: "Nota",
@@ -24,6 +30,16 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
 
   const order = await getOrder(id);
   if (!order) notFound();
+
+  const supabase = await createClient();
+  const [{ data: items }, { data: dishTags }] = await Promise.all([
+    supabase
+      .from("order_items")
+      .select("*")
+      .eq("order_id", id)
+      .order("created_at", { ascending: true }),
+    supabase.from("dish_tags").select("id, name").order("name", { ascending: true }),
+  ]);
 
   const timeZone = session.timezone;
   const editable = order.status === "aberto" || order.status === "entregue";
@@ -143,6 +159,12 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
               <span className="text-[14px] text-ink-soft">Não informado</span>
             )}
           </div>
+
+          <OrderItems
+            orderId={order.id}
+            items={(items ?? []) as OrderItem[]}
+            dishTags={(dishTags ?? []) as DishTagOption[]}
+          />
         </div>
 
         {(editable || manageable) ? (

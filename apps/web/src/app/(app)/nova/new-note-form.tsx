@@ -12,26 +12,73 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { IconAlert, IconSpinner } from "@/components/ui/icons";
+import {
+  IconAlert,
+  IconPlus,
+  IconSpinner,
+  IconX,
+} from "@/components/ui/icons";
 import { errorBoxClass, inputClass, labelClass } from "@/components/ui/styles";
 import { createOrder } from "@/lib/actions/orders";
+import { formatCents } from "@/lib/format";
+import type { BaiãoOption, OrderItemInput } from "@/lib/types";
 
 const DRAFT_KEY = "pedidos:nova-nota";
+
+/** "nao" é o estado de interface; no payload vira `null` (não informado). */
+type BaiaoChoice = BaiãoOption | "nao";
+
+interface DraftItem extends OrderItemInput {
+  key: string;
+}
 
 interface Draft {
   name?: string;
   description?: string;
   valueCents?: number;
   valueOpen?: boolean;
+  items?: OrderItemInput[];
 }
 
-export function NewNoteForm({ initialError }: { initialError: string | null }) {
+export interface DishTagOption {
+  id: string;
+  name: string;
+}
+
+const BAIAO_OPTIONS: { value: BaiaoChoice; label: string }[] = [
+  { value: "com", label: "Com baião" },
+  { value: "sem", label: "Sem baião" },
+  { value: "nao", label: "Não informado" },
+];
+
+function itemMeta(item: DraftItem, dishTags: DishTagOption[]): string {
+  const dish = dishTags.find((tag) => tag.id === item.dishTagId)?.name;
+  const baiao =
+    item.baiãoOption === "com"
+      ? "com baião"
+      : item.baiãoOption === "sem"
+        ? "sem baião"
+        : null;
+
+  return [dish, baiao].filter(Boolean).join(" · ") || "Sem prato definido";
+}
+
+export function NewNoteForm({
+  initialError,
+  dishTags,
+}: {
+  initialError: string | null;
+  dishTags: DishTagOption[];
+}) {
   const router = useRouter();
   const errorId = useId();
+  const itemPanelId = useId();
 
   const nameRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const valueRef = useRef<HTMLInputElement>(null);
+  const itemNameRef = useRef<HTMLInputElement>(null);
+  const itemValueRef = useRef<HTMLInputElement>(null);
   const openedValueRef = useRef(false);
 
   const [customerName, setCustomerName] = useState("");
@@ -40,6 +87,15 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
   const [valueCents, setValueCents] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(initialError);
   const [pending, setPending] = useState(false);
+
+  // Itens da nota
+  const [items, setItems] = useState<DraftItem[]>([]);
+  const [itemsOpen, setItemsOpen] = useState(false);
+  const [itemName, setItemName] = useState("");
+  const [itemDishTagId, setItemDishTagId] = useState("");
+  const [itemBaiao, setItemBaiao] = useState<BaiaoChoice>("nao");
+  const [itemValueCents, setItemValueCents] = useState<number | null>(null);
+  const [itemError, setItemError] = useState<string | null>(null);
 
   // Recupera o rascunho quando o salvamento falhou depois de sair da tela.
   useEffect(() => {
@@ -55,6 +111,20 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
       if (typeof draft.description === "string") setDescription(draft.description);
       if (typeof draft.valueCents === "number") setValueCents(draft.valueCents);
       if (draft.valueOpen === true) setValueOpen(true);
+
+      if (Array.isArray(draft.items)) {
+        const restored = draft.items
+          .filter(
+            (item): item is OrderItemInput =>
+              typeof item?.itemName === "string" &&
+              typeof item?.unitPriceCents === "number",
+          )
+          .map((item, index) => ({
+            ...item,
+            key: `rascunho-${index}`,
+          }));
+        if (restored.length > 0) setItems(restored);
+      }
     } catch {
       // Rascunho indisponível: segue com o formulário limpo.
     }
@@ -68,6 +138,11 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
     }
   }, [valueOpen]);
 
+  // Ao abrir a seção de itens, leva o foco para o primeiro campo.
+  useEffect(() => {
+    if (itemsOpen) itemNameRef.current?.focus();
+  }, [itemsOpen]);
+
   // Textarea cresce com o conteúdo, sem barra de rolagem interna.
   useEffect(() => {
     const element = descriptionRef.current;
@@ -80,6 +155,45 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
     if (event.key !== "Enter") return;
     event.preventDefault();
     descriptionRef.current?.focus();
+  }
+
+  function resetItemForm() {
+    setItemName("");
+    setItemDishTagId("");
+    setItemBaiao("nao");
+    setItemValueCents(null);
+    setItemError(null);
+  }
+
+  function handleAddItem() {
+    const name = itemName.trim();
+
+    if (!name) {
+      setItemError("Informe o nome do item.");
+      itemNameRef.current?.focus();
+      return;
+    }
+    if (itemValueCents === null) {
+      setItemError("Informe o valor do item.");
+      return;
+    }
+
+    setItems((current) => [
+      ...current,
+      {
+        key: `item-${current.length}-${name}`,
+        itemName: name,
+        dishTagId: itemDishTagId || null,
+        baiãoOption: itemBaiao === "nao" ? null : itemBaiao,
+        unitPriceCents: itemValueCents,
+      },
+    ]);
+    resetItemForm();
+    itemNameRef.current?.focus();
+  }
+
+  function handleRemoveItem(key: string) {
+    setItems((current) => current.filter((item) => item.key !== key));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -100,7 +214,37 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
       return;
     }
 
+    // Item digitado mas não adicionado à lista: inclui se estiver completo.
+    let submittedItems = items;
+    const hasPendingItem =
+      itemName.trim().length > 0 || itemValueCents !== null;
+
+    if (hasPendingItem) {
+      if (!itemName.trim() || itemValueCents === null) {
+        setError("Complete o item em aberto ou feche a seção de itens.");
+        itemNameRef.current?.focus();
+        return;
+      }
+
+      submittedItems = [
+        ...items,
+        {
+          key: "item-em-aberto",
+          itemName: itemName.trim(),
+          dishTagId: itemDishTagId || null,
+          baiãoOption: itemBaiao === "nao" ? null : itemBaiao,
+          unitPriceCents: itemValueCents,
+        },
+      ];
+    }
+
     const totalCents = valueOpen ? valueCents : null;
+    const payloadItems: OrderItemInput[] = submittedItems.map((item) => ({
+      itemName: item.itemName,
+      dishTagId: item.dishTagId,
+      baiãoOption: item.baiãoOption,
+      unitPriceCents: item.unitPriceCents,
+    }));
 
     setError(null);
     setPending(true);
@@ -108,7 +252,13 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
     try {
       sessionStorage.setItem(
         DRAFT_KEY,
-        JSON.stringify({ name, description: order, valueCents, valueOpen }),
+        JSON.stringify({
+          name,
+          description: order,
+          valueCents,
+          valueOpen,
+          items: payloadItems,
+        }),
       );
     } catch {
       // Sem armazenamento local: segue sem rascunho.
@@ -119,6 +269,7 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
       customerName: name,
       description: order,
       totalCents,
+      items: payloadItems.length > 0 ? payloadItems : undefined,
     });
     router.push("/");
 
@@ -149,6 +300,11 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
       );
     }
   }
+
+  const itemsTotalCents = items.reduce(
+    (sum, item) => sum + item.unitPriceCents,
+    0,
+  );
 
   return (
     <form
@@ -202,7 +358,13 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
             />
           </div>
 
-          <div className="mt-3 [@media(max-height:30rem)]:mt-2">
+          <div
+            className={
+              items.length > 0
+                ? "hidden"
+                : "mt-3 [@media(max-height:30rem)]:mt-2"
+            }
+          >
             {valueOpen ? (
               <>
                 <label htmlFor="valor" className={labelClass}>
@@ -271,6 +433,208 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
       </div>
 
       {/*
+       * Itens da nota: a seção nasce fechada para o botão Salvar continuar na
+       * dobra em 320x568 e em altura curta. Ao abrir, os campos do item são
+       * explícitos e a lista de itens já adicionados fica sempre visível.
+       */}
+      <section aria-label="Itens da nota" className="mt-4 [@media(max-height:30rem)]:mt-2">
+        <div className="flex items-center justify-between gap-3 [@media(max-height:30rem)]:hidden">
+          <h2 className="text-[13px] font-semibold tracking-[0.08em] text-ink-soft uppercase">
+            Itens
+            <span className="ml-1 font-normal normal-case tracking-normal">
+              (opcional)
+            </span>
+          </h2>
+
+          <Button
+            size="compact"
+            variant={itemsOpen ? "ghost" : "secondary"}
+            onClick={() => {
+              setItemError(null);
+              setItemsOpen(!itemsOpen);
+            }}
+            aria-expanded={itemsOpen}
+            aria-controls={itemsOpen ? itemPanelId : undefined}
+            disabled={pending}
+          >
+            {itemsOpen ? (
+              "Fechar"
+            ) : (
+              <>
+                <IconPlus size={16} />
+                Item
+              </>
+            )}
+          </Button>
+        </div>
+
+        {items.length > 0 ? (
+          <>
+            <ul className="mt-2 space-y-2">
+              {items.map((item) => (
+                <li
+                  key={item.key}
+                  className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-medium text-ink">
+                      {item.itemName}
+                    </p>
+                    <p className="truncate text-[12px] text-ink-soft">
+                      {itemMeta(item, dishTags)}
+                    </p>
+                  </div>
+                  <span className="tabular shrink-0 text-[15px] text-ink">
+                    {formatCents(item.unitPriceCents)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveItem(item.key)}
+                    aria-label={`Remover item ${item.itemName}`}
+                    disabled={pending}
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-danger transition-colors duration-150 hover:bg-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-60"
+                  >
+                    <IconX size={18} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            <p className="tabular mt-2 text-right text-[13px] text-ink-soft">
+              Itens somam {formatCents(itemsTotalCents)}
+            </p>
+          </>
+        ) : null}
+
+        {itemsOpen ? (
+          <div
+            id={itemPanelId}
+            onKeyDown={(event) => {
+              // Enter dentro dos campos do item adiciona o item; sem isso o
+              // formulário inteiro seria enviado no meio da montagem da nota.
+              if (event.key !== "Enter") return;
+              if ((event.target as HTMLElement).tagName === "BUTTON") return;
+
+              event.preventDefault();
+              if (event.target === itemNameRef.current) {
+                itemValueRef.current?.focus();
+                return;
+              }
+              handleAddItem();
+            }}
+            className="mt-3 rounded-xl border border-line bg-surface p-3"
+          >
+            {itemError ? (
+              <div role="alert" aria-live="assertive" className={`${errorBoxClass} mb-3`}>
+                <IconAlert size={18} className="mt-0.5 shrink-0" />
+                <span>{itemError}</span>
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-1 gap-3 [@media(min-width:30rem)]:grid-cols-2">
+              <div className="[@media(min-width:30rem)]:col-span-2">
+                <label htmlFor="item-nome" className={labelClass}>
+                  Nome do item
+                </label>
+                <input
+                  id="item-nome"
+                  ref={itemNameRef}
+                  type="text"
+                  maxLength={80}
+                  enterKeyHint="next"
+                  autoComplete="off"
+                  autoCapitalize="words"
+                  value={itemName}
+                  disabled={pending}
+                  onChange={(event) => {
+                    setItemError(null);
+                    setItemName(event.target.value);
+                  }}
+                  placeholder="Ex.: Forte Couro"
+                  className={`${inputClass} mt-1.5`}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="item-prato" className={labelClass}>
+                  Prato
+                </label>
+                <select
+                  id="item-prato"
+                  value={itemDishTagId}
+                  disabled={pending || dishTags.length === 0}
+                  onChange={(event) => setItemDishTagId(event.target.value)}
+                  className={`${inputClass} mt-1.5`}
+                >
+                  <option value="">Sem prato</option>
+                  {dishTags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+                {dishTags.length === 0 ? (
+                  <p className="mt-1 text-[12px] text-ink-soft">
+                    Nenhum prato cadastrado ainda.
+                  </p>
+                ) : null}
+              </div>
+
+              <div>
+                <label htmlFor="item-valor" className={labelClass}>
+                  Valor do item
+                </label>
+                <CurrencyInput
+                  id="item-valor"
+                  inputRef={itemValueRef}
+                  value={itemValueCents}
+                  onValueChange={(cents) => {
+                    setItemError(null);
+                    setItemValueCents(cents);
+                  }}
+                  disabled={pending}
+                />
+              </div>
+
+              <fieldset className="[@media(min-width:30rem)]:col-span-2">
+                <legend className={labelClass}>Baião</legend>
+                <div className="mt-1.5 grid grid-cols-3 gap-2">
+                  {BAIAO_OPTIONS.map((option) => (
+                    <label
+                      key={option.value}
+                      className="relative flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line-strong bg-surface px-2 text-center text-[13px] font-medium text-ink transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand"
+                    >
+                      <input
+                        type="radio"
+                        name="item-baiao"
+                        value={option.value}
+                        checked={itemBaiao === option.value}
+                        disabled={pending}
+                        onChange={() => setItemBaiao(option.value)}
+                        className="sr-only"
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+
+            <Button
+              variant="secondary"
+              className="mt-3"
+              fullWidth
+              onClick={handleAddItem}
+              disabled={pending}
+            >
+              <IconPlus size={18} />
+              Adicionar item
+            </Button>
+          </div>
+        ) : null}
+      </section>
+
+      {/*
        * Rodapé: só o botão Salvar, no fluxo, logo depois dos campos.
        *
        * O valor opcional vive no bloco de campos (acima do pedido) — antes ele
@@ -283,7 +647,34 @@ export function NewNoteForm({ initialError }: { initialError: string | null }) {
        * para 8px, o que mantém o botão visível em 667x375 sem encostar na
        * navegação flutuante.
        */}
-      <div className="mt-4 [@media(max-height:30rem)]:mt-2">
+      <div className="mt-4 [@media(max-height:30rem)]:mt-2 [@media(max-height:30rem)]:flex [@media(max-height:30rem)]:items-center [@media(max-height:30rem)]:gap-2">
+        {/*
+         * Em altura curta o cabeçalho da seção de itens sai de cena e o botão
+         * "Item" desce para o rodapé, ao lado de Salvar: a ação primária
+         * continua na dobra em 667x375 sem somar 52px de header.
+         */}
+        <Button
+          size="lg"
+          variant="secondary"
+          onClick={() => {
+            setItemError(null);
+            setItemsOpen(!itemsOpen);
+          }}
+          aria-expanded={itemsOpen}
+          aria-controls={itemsOpen ? itemPanelId : undefined}
+          disabled={pending}
+          className="hidden shrink-0 [@media(max-height:30rem)]:inline-flex"
+        >
+          {itemsOpen ? (
+            "Fechar"
+          ) : (
+            <>
+              <IconPlus size={18} />
+              Item
+            </>
+          )}
+        </Button>
+
         <Button type="submit" size="lg" fullWidth disabled={pending}>
           {pending ? (
             <>

@@ -11,17 +11,25 @@ import {
   IconCash,
   IconCheck,
   IconPencil,
+  IconPlus,
   IconSpinner,
   IconX,
 } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
 import { errorBoxClass, inputClass, labelClass } from "@/components/ui/styles";
+import {
+  createOrderItem,
+  deleteOrderItem,
+  updateOrderItem,
+} from "@/lib/actions/order-items";
 import { cancelOrder, deleteOrder, deliverOrder, payOrder, updateOrder } from "@/lib/actions/orders";
 import { formatCents } from "@/lib/format";
 import {
   PAYMENT_METHOD_LABEL,
+  type BaiãoOption,
   type MemberRole,
   type Order,
+  type OrderItemInput,
   type PaymentMethod,
 } from "@/lib/types";
 
@@ -32,6 +40,30 @@ const METHODS: PaymentMethod[] = [
   "debito",
   "outro",
 ];
+
+/** "nao" é o estado de interface; no payload vira `null` (não informado). */
+type BaiaoChoice = BaiãoOption | "nao";
+
+const BAIAO_OPTIONS: { value: BaiaoChoice; label: string }[] = [
+  { value: "com", label: "Com baião" },
+  { value: "sem", label: "Sem baião" },
+  { value: "nao", label: "Não informado" },
+];
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  item_name: string;
+  dish_tag_id: string | null;
+  baião_option: "com" | "sem" | null;
+  unit_price_cents: number;
+  created_at: string;
+}
+
+export interface DishTagOption {
+  id: string;
+  name: string;
+}
 
 interface OrderActionsProps {
   order: Order;
@@ -79,6 +111,11 @@ export function OrderActions({ order, role }: OrderActionsProps) {
         </div>
       ) : null}
 
+      {/*
+       * Itens da nota: a lista e os controles individuais vivem no mesmo
+       * bloco, então o dono/atendente consegue ajustar item mesmo depois do
+       * pagamento ou do cancelamento — cortar acesso é outra ação.
+       */}
       {order.status === "aberto" ? (
         <Button
           size="lg"
@@ -150,6 +187,388 @@ export function OrderActions({ order, role }: OrderActionsProps) {
         <DeleteDialog order={order} open={deleteOpen} onClose={() => setDeleteOpen(false)} />
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Itens da nota: lista + controles individuais. Fica na coluna de conteúdo (não
+ * no trilho de ações) para a lista respirar, e aparece em qualquer status — o
+ * dono e o atendente ajustam item mesmo em nota paga ou cancelada.
+ */
+export function OrderItems({
+  orderId,
+  items,
+  dishTags,
+}: {
+  orderId: string;
+  items: OrderItem[];
+  dishTags: DishTagOption[];
+}) {
+  const [itemDialog, setItemDialog] = useState<
+    { mode: "create" } | { mode: "edit"; item: OrderItem } | null
+  >(null);
+  const [itemToDelete, setItemToDelete] = useState<OrderItem | null>(null);
+
+  const dishTagName = (id: string | null) =>
+    id ? (dishTags.find((tag) => tag.id === id)?.name ?? null) : null;
+
+  return (
+    <>
+      <section
+        aria-label="Itens da nota"
+        className="mt-3 rounded-2xl border border-line bg-surface p-4 [@media(max-height:30rem)]:mt-2 [@media(max-height:30rem)]:p-3"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-[13px] font-semibold tracking-[0.08em] text-ink-soft uppercase">
+            Itens
+          </h2>
+          <Button
+            size="compact"
+            variant="secondary"
+            onClick={() => setItemDialog({ mode: "create" })}
+          >
+            <IconPlus size={16} />
+            Item
+          </Button>
+        </div>
+
+        {items.length === 0 ? (
+          <p className="mt-2 text-[13px] text-ink-soft">
+            Nenhum item nesta nota.
+          </p>
+        ) : (
+          <ul className="mt-1 divide-y divide-line">
+            {items.map((item) => {
+              const dish = dishTagName(item.dish_tag_id);
+              const baiao =
+                item.baião_option === "com"
+                  ? "com baião"
+                  : item.baião_option === "sem"
+                    ? "sem baião"
+                    : null;
+              const meta = [dish, baiao].filter(Boolean).join(" · ");
+
+              return (
+                <li key={item.id} className="py-1.5 first:pt-0.5 last:pb-0.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[15px] leading-snug font-medium break-words text-ink">
+                        {item.item_name}
+                      </p>
+                      <p className="truncate text-[12px] text-ink-soft">
+                        {meta || "Sem prato definido"}
+                      </p>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-1">
+                      <span className="tabular text-[15px] text-ink">
+                        {formatCents(item.unit_price_cents)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setItemDialog({ mode: "edit", item })}
+                        aria-label={`Editar item ${item.item_name}`}
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-ink-soft transition-colors duration-150 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                      >
+                        <IconPencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setItemToDelete(item)}
+                        aria-label={`Excluir item ${item.item_name}`}
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-danger transition-colors duration-150 hover:bg-danger-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                      >
+                        <IconX size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {itemDialog ? (
+        <ItemDialog
+          orderId={orderId}
+          item={itemDialog.mode === "edit" ? itemDialog.item : null}
+          dishTags={dishTags}
+          onClose={() => setItemDialog(null)}
+        />
+      ) : null}
+
+      {itemToDelete ? (
+        <DeleteItemDialog
+          item={itemToDelete}
+          onClose={() => setItemToDelete(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function ItemDialog({
+  orderId,
+  item,
+  dishTags,
+  onClose,
+}: {
+  orderId: string;
+  item: OrderItem | null;
+  dishTags: DishTagOption[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [itemName, setItemName] = useState(item?.item_name ?? "");
+  const [dishTagId, setDishTagId] = useState(item?.dish_tag_id ?? "");
+  const [baiao, setBaiao] = useState<BaiaoChoice>(item?.baião_option ?? "nao");
+  const [value, setValue] = useState<number | null>(
+    item?.unit_price_cents ?? null,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleConfirm() {
+    if (pending) return;
+
+    const name = itemName.trim();
+    if (!name) {
+      setError("Informe o nome do item.");
+      return;
+    }
+    if (value === null) {
+      setError("Informe o valor do item.");
+      return;
+    }
+
+    const input: OrderItemInput = {
+      itemName: name,
+      dishTagId: dishTagId || null,
+      baiãoOption: baiao === "nao" ? null : baiao,
+      unitPriceCents: value,
+    };
+
+    setError(null);
+    setPending(true);
+
+    try {
+      const result = item
+        ? await updateOrderItem({ id: item.id, ...input })
+        : await createOrderItem({ orderId, ...input });
+      if (!result.ok) {
+        setError(result.error ?? "Não foi possível salvar o item.");
+        return;
+      }
+      onClose();
+      router.refresh();
+    } catch {
+      setError("Falha de conexão. Tente novamente.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={item ? "Editar item" : "Adicionar item"}
+      description={
+        item
+          ? "Altere o nome, o prato, o baião ou o valor deste item."
+          : "Cada item tem seu próprio nome, prato, baião e valor."
+      }
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={onClose}
+            disabled={pending}
+          >
+            Voltar
+          </Button>
+          <Button className="flex-1" onClick={handleConfirm} disabled={pending}>
+            {pending ? (
+              <>
+                <IconSpinner size={18} />
+                Salvando…
+              </>
+            ) : (
+              "Salvar"
+            )}
+          </Button>
+        </>
+      }
+    >
+      {error ? (
+        <div role="alert" aria-live="assertive" className={`${errorBoxClass} mb-4`}>
+          <IconAlert size={18} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="item-nome" className={labelClass}>
+            Nome do item
+          </label>
+          <input
+            id="item-nome"
+            data-autofocus
+            type="text"
+            maxLength={80}
+            enterKeyHint="next"
+            autoComplete="off"
+            autoCapitalize="words"
+            value={itemName}
+            disabled={pending}
+            onChange={(event) => setItemName(event.target.value)}
+            placeholder="Ex.: Forte Couro"
+            className={`${inputClass} mt-1.5`}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="item-prato" className={labelClass}>
+            Prato
+          </label>
+          <select
+            id="item-prato"
+            value={dishTagId}
+            disabled={pending || dishTags.length === 0}
+            onChange={(event) => setDishTagId(event.target.value)}
+            className={`${inputClass} mt-1.5`}
+          >
+            <option value="">Sem prato</option>
+            {dishTags.map((tag) => (
+              <option key={tag.id} value={tag.id}>
+                {tag.name}
+              </option>
+            ))}
+          </select>
+          {dishTags.length === 0 ? (
+            <p className="mt-1 text-[13px] text-ink-soft">
+              Nenhum prato cadastrado ainda.
+            </p>
+          ) : null}
+        </div>
+
+        <fieldset>
+          <legend className={labelClass}>Baião</legend>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {BAIAO_OPTIONS.map((option) => (
+              <label
+                key={option.value}
+                className="relative flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line-strong bg-surface px-2 text-center text-[13px] font-medium text-ink transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand"
+              >
+                <input
+                  type="radio"
+                  name="item-baiao"
+                  value={option.value}
+                  checked={baiao === option.value}
+                  disabled={pending}
+                  onChange={() => setBaiao(option.value)}
+                  className="sr-only"
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div>
+          <label htmlFor="item-valor" className={labelClass}>
+            Valor do item
+          </label>
+          <CurrencyInput
+            id="item-valor"
+            value={value}
+            onValueChange={setValue}
+            disabled={pending}
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function DeleteItemDialog({
+  item,
+  onClose,
+}: {
+  item: OrderItem;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleConfirm() {
+    if (deleting) return;
+    setError(null);
+    setDeleting(true);
+
+    try {
+      const result = await deleteOrderItem({ id: item.id });
+      if (!result.ok) {
+        setError(result.error ?? "Não foi possível excluir o item.");
+        return;
+      }
+      onClose();
+      router.refresh();
+    } catch {
+      setError("Falha de conexão. Tente novamente.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Excluir item"
+      description={`O item ${item.item_name} será removido desta nota.`}
+      footer={
+        <>
+          <Button
+            variant="secondary"
+            className="flex-1"
+            onClick={onClose}
+            disabled={deleting}
+          >
+            Manter item
+          </Button>
+          <Button
+            variant="danger"
+            className="flex-1"
+            onClick={handleConfirm}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <>
+                <IconSpinner size={18} />
+                Excluindo…
+              </>
+            ) : (
+              "Excluir item"
+            )}
+          </Button>
+        </>
+      }
+    >
+      {error ? (
+        <div role="alert" aria-live="assertive" className={`${errorBoxClass} mb-4`}>
+          <IconAlert size={18} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+      <p className="text-[13px] text-ink-soft">
+        O valor deste item deixa de somar na nota.
+      </p>
+    </Modal>
   );
 }
 
