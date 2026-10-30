@@ -242,10 +242,13 @@ export async function deleteOrder(id: string): Promise<ActionResult> {
     return failure("Somente o dono pode excluir notas.");
   }
 
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("orders").delete().eq("id", id);
 
-  if (error) return dbFailure(error);
+  if (error) {
+    console.error("[deleteOrder] erro ao excluir:", error);
+    return failure("Não foi possível excluir a nota. Verifique se você é o dono do restaurante.");
+  }
 
   refresh(id);
   return { ok: true };
