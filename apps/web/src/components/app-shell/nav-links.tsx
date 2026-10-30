@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
-import { IconCash, IconNote, IconUsers } from "@/components/ui/icons";
+import { IconCash, IconNote, IconPlus, IconSearch, IconUsers } from "@/components/ui/icons";
 import type { MemberRole } from "@/lib/types";
 
 /** Ícone aceita `size`/`className`; restringe o tipo ao que a nav consome. */
@@ -37,6 +37,12 @@ export function useNavItems(role: MemberRole): NavItem[] {
       Icon: IconCash,
       active: pathname.startsWith("/caixa"),
     },
+    {
+      href: "/filtros",
+      label: "Filtros",
+      Icon: IconSearch,
+      active: pathname.startsWith("/filtros"),
+    },
   ];
 
   if (role === "owner") {
@@ -45,6 +51,12 @@ export function useNavItems(role: MemberRole): NavItem[] {
       label: "Equipe",
       Icon: IconUsers,
       active: pathname.startsWith("/equipe"),
+    });
+    items.push({
+      href: "/tags",
+      label: "Pratos",
+      Icon: IconPlus,
+      active: pathname.startsWith("/tags"),
     });
   }
 
