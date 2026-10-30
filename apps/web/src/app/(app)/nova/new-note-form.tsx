@@ -308,7 +308,7 @@ export function NewNoteForm({
       <div className="[@media(min-width:40rem)_and_(max-height:30rem)]:flex [@media(min-width:40rem)_and_(max-height:30rem)]:items-start [@media(min-width:40rem)_and_(max-height:30rem)]:gap-4">
         <div className="min-w-0 [@media(min-width:40rem)_and_(max-height:30rem)]:flex-1">
           <label htmlFor="cliente" className={labelClass}>
-            Nome do cliente
+            Empresa / cliente
           </label>
           <input
             id="cliente"
@@ -327,7 +327,7 @@ export function NewNoteForm({
             onKeyDown={focusObservations}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? errorId : undefined}
-            placeholder="Ex.: Dona Lúcia"
+            placeholder="Ex.: Forte Couro ou Dona Lúcia"
             className={`${inputClass} mt-1.5`}
           />
         </div>
@@ -398,7 +398,7 @@ export function NewNoteForm({
           <div className="grid grid-cols-1 gap-3 [@media(min-width:26rem)]:grid-cols-2 [@media(max-height:30rem)]:gap-2">
             <div className="[@media(min-width:26rem)]:col-span-2">
               <label htmlFor="item-nome" className={labelClass}>
-                Nome do item
+                Funcionário / item
               </label>
               <input
                 id="item-nome"
@@ -414,7 +414,7 @@ export function NewNoteForm({
                   setItemError(null);
                   setItemName(event.target.value);
                 }}
-                placeholder="Ex.: Forte Couro"
+                placeholder="Ex.: Targino ou marmita"
                 className={`${inputClass} mt-1.5`}
               />
             </div>

@@ -11,7 +11,6 @@ import {
   IconCash,
   IconCheck,
   IconPencil,
-  IconPlus,
   IconSpinner,
   IconX,
 } from "@/components/ui/icons";
@@ -218,19 +217,9 @@ export function OrderItems({
         aria-label="Itens da nota"
         className="mt-3 rounded-2xl border border-line bg-surface p-4 [@media(max-height:30rem)]:mt-2 [@media(max-height:30rem)]:p-3"
       >
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-[13px] font-semibold tracking-[0.08em] text-ink-soft uppercase">
-            Itens
-          </h2>
-          <Button
-            size="compact"
-            variant="secondary"
-            onClick={() => setItemDialog({ mode: "create" })}
-          >
-            <IconPlus size={16} />
-            Item
-          </Button>
-        </div>
+        <h2 className="text-[13px] font-semibold tracking-[0.08em] text-ink-soft uppercase">
+          Itens
+        </h2>
 
         {items.length === 0 ? (
           <p className="mt-2 text-[13px] text-ink-soft">
@@ -412,7 +401,7 @@ function ItemDialog({
       <div className="space-y-4">
         <div>
           <label htmlFor="item-nome" className={labelClass}>
-            Nome do item
+            Funcionário / item
           </label>
           <input
             id="item-nome"
@@ -425,7 +414,7 @@ function ItemDialog({
             value={itemName}
             disabled={pending}
             onChange={(event) => setItemName(event.target.value)}
-            placeholder="Ex.: Forte Couro"
+            placeholder="Ex.: Targino ou marmita"
             className={`${inputClass} mt-1.5`}
           />
         </div>
@@ -767,7 +756,7 @@ function EditDialog({ order, onClose }: { order: Order; onClose: () => void }) {
       <div className="space-y-4">
         <div>
           <label htmlFor="editar-cliente" className={labelClass}>
-            Nome do cliente
+            Empresa / cliente
           </label>
           <input
             id="editar-cliente"
