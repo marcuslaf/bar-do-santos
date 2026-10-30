@@ -43,6 +43,17 @@ export interface Member {
   created_at: string;
 }
 
+/** Opção de baião de um item de nota: com, sem ou não informado (null). */
+export type BaiãoOption = "com" | "sem";
+
+/** Entrada de item usada na captura e na edição da nota. */
+export interface OrderItemInput {
+  itemName: string;
+  dishTagId?: string | null;
+  baiãoOption?: BaiãoOption | null;
+  unitPriceCents: number;
+}
+
 export interface ActionResult<T = undefined> {
   ok: boolean;
   error?: string;

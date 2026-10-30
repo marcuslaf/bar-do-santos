@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ActionResult } from "@/lib/types";
+import type { ActionResult, OrderItemInput } from "@/lib/types";
 
 const MAX_MONEY_CENTS = 100_000_00;
 
@@ -15,6 +15,21 @@ const moneySchema = z
   .int("Valor inválido.")
   .min(0, "Valor não pode ser negativo.")
   .max(MAX_MONEY_CENTS, "Valor acima do limite permitido.");
+
+/*
+ * Item de nota na captura. `baião_option` é o nome literal da coluna (o acento
+ * faz parte do identificador), por isso a chave entre aspas no insert.
+ */
+const itemSchema = z.object({
+  itemName: z
+    .string()
+    .trim()
+    .min(1, "Informe o item.")
+    .max(80, "Item muito longo (máx. 80)."),
+  dishTagId: z.string().uuid("Tag inválida.").nullable().optional(),
+  baiãoOption: z.enum(["com", "sem"]).nullable().optional(),
+  unitPriceCents: moneySchema,
+});
 
 const createSchema = z.object({
   customerName: z
@@ -28,6 +43,7 @@ const createSchema = z.object({
     .min(1, "Escreva o pedido.")
     .max(2000, "Pedido muito longo (máx. 2000)."),
   totalCents: moneySchema.nullable().optional(),
+  items: z.array(itemSchema).optional(),
 });
 
 const updateSchema = z.object({
@@ -76,6 +92,7 @@ export async function createOrder(input: {
   customerName: string;
   description: string;
   totalCents?: number | null;
+  items?: OrderItemInput[];
 }): Promise<ActionResult<{ id: string }>> {
   const session = await getSession();
   if (!session) return failure("Sessão expirada. Entre novamente.");
@@ -85,18 +102,45 @@ export async function createOrder(input: {
     return failure(parsed.error.issues[0]?.message ?? "Dados inválidos.");
   }
 
+  // Com itens, o total é a soma deles: o valor digitado à mão deixa de valer
+  // (só continua como fallback na captura antiga, sem itens).
+  const items = parsed.data.items ?? [];
+  const totalCents =
+    items.length > 0
+      ? items.reduce((sum, item) => sum + item.unitPriceCents, 0)
+      : parsed.data.totalCents ?? null;
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("orders")
     .insert({
       customer_name: parsed.data.customerName,
       description: parsed.data.description,
-      total_cents: parsed.data.totalCents ?? null,
+      total_cents: totalCents,
     })
     .select("id")
     .single<{ id: string }>();
 
   if (error) return dbFailure(error);
+
+  if (items.length > 0) {
+    const { error: itemsError } = await supabase.from("order_items").insert(
+      items.map((item) => ({
+        order_id: data.id,
+        item_name: item.itemName,
+        dish_tag_id: item.dishTagId ?? null,
+        "baião_option": item.baiãoOption ?? null,
+        unit_price_cents: item.unitPriceCents,
+      })),
+    );
+
+    // Nota sem os itens que o total cobra seria pior que nota nenhuma: desfaz o
+    // insert pelo admin, já que `orders` não tem policy de DELETE.
+    if (itemsError) {
+      await createAdminClient().from("orders").delete().eq("id", data.id);
+      return dbFailure(itemsError);
+    }
+  }
 
   refresh(data.id);
   return { ok: true, data: { id: data.id } };
