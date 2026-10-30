@@ -90,6 +90,19 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
             </p>
           </div>
 
+          {/*
+           * Itens no cabeçalho da nota: é o conteúdo que o balcão confere
+           * primeiro. Em altura curta a lista rola sozinha em vez de empurrar
+           * o restante (e as ações) para fora da dobra.
+           */}
+          <div className="[@media(max-height:30rem)]:max-h-44 [@media(max-height:30rem)]:overflow-y-auto">
+            <OrderItems
+              orderId={order.id}
+              items={(items ?? []) as OrderItem[]}
+              dishTags={(dishTags ?? []) as DishTagOption[]}
+            />
+          </div>
+
           {order.status === "pago" ? (
             <div
               role="status"
@@ -138,10 +151,16 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
           ) : null}
 
           <section
-            aria-label="Pedido"
-            className="mt-4 rounded-2xl border border-line bg-surface p-4 shadow-card [@media(max-height:30rem)]:mt-2 [@media(max-height:30rem)]:max-h-28 [@media(max-height:30rem)]:overflow-y-auto [@media(max-height:30rem)]:p-3"
+            aria-labelledby="nota-observacoes"
+            className="mt-3 rounded-2xl border border-line bg-surface p-4 shadow-card [@media(max-height:30rem)]:mt-2 [@media(max-height:30rem)]:max-h-24 [@media(max-height:30rem)]:overflow-y-auto [@media(max-height:30rem)]:p-3"
           >
-            <p className="text-[17px] leading-relaxed break-words whitespace-pre-wrap text-ink">
+            <h2
+              id="nota-observacoes"
+              className="text-[13px] font-semibold tracking-[0.08em] text-ink-soft uppercase"
+            >
+              Observações
+            </h2>
+            <p className="mt-1.5 text-[17px] leading-relaxed break-words whitespace-pre-wrap text-ink">
               {order.description}
             </p>
           </section>
@@ -159,12 +178,6 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
               <span className="text-[14px] text-ink-soft">Não informado</span>
             )}
           </div>
-
-          <OrderItems
-            orderId={order.id}
-            items={(items ?? []) as OrderItem[]}
-            dishTags={(dishTags ?? []) as DishTagOption[]}
-          />
         </div>
 
         {(editable || manageable) ? (
