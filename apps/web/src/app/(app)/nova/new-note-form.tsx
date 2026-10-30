@@ -201,7 +201,7 @@ export function NewNoteForm({
     // Item digitado mas não adicionado à lista: inclui se estiver completo.
     let submittedItems = items;
     const hasPendingItem =
-      itemName.trim().length > 0 || itemValueCents !== null;
+      itemNameOpen && (itemName.trim().length > 0 || itemValueCents !== null);
 
     if (hasPendingItem) {
       if (!itemName.trim() || itemValueCents === null) {
@@ -504,19 +504,7 @@ export function NewNoteForm({
               </fieldset>
             </div>
 
-            <Button
-              variant="primary"
-              className="mt-3"
-              fullWidth
-              onClick={handleAddItem}
-              disabled={pending}
-            >
-              <IconPlus size={18} />
-              Adicionar item
-            </Button>
-          </div>
-
-        {items.length > 0 ? (
+          {items.length > 0 ? (
           <>
             <ul className="mt-3 space-y-2">
               {items.map((item) => (
@@ -560,6 +548,7 @@ export function NewNoteForm({
             Sem itens a nota fica sem valor definido na captura.
           </p>
         )}
+      </div>
       </section>
 
       {/*
