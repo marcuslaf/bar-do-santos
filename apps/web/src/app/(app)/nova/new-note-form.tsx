@@ -89,6 +89,7 @@ export function NewNoteForm({
   const [itemBaiao, setItemBaiao] = useState<BaiaoChoice>("nao");
   const [itemValueCents, setItemValueCents] = useState<number | null>(null);
   const [itemError, setItemError] = useState<string | null>(null);
+  const [itemFormOpen, setItemFormOpen] = useState(false);
 
   // Recupera o rascunho quando o salvamento falhou depois de sair da tela.
   useEffect(() => {
@@ -177,6 +178,7 @@ export function NewNoteForm({
 
     setItems((current) => [...current, itemFromForm(nextItemKey())]);
     resetItemForm();
+    setItemFormOpen(false);
     itemNameRef.current?.focus();
   }
 
@@ -368,133 +370,159 @@ export function NewNoteForm({
           Itens da nota
         </h2>
 
-        <div
-          onKeyDown={(event) => {
-            // Enter dentro dos campos do item adiciona o item; sem isso o
-            // formulário inteiro seria enviado no meio da montagem da nota.
-            if (event.key !== "Enter") return;
-            if ((event.target as HTMLElement).tagName === "BUTTON") return;
-
-            event.preventDefault();
-            if (event.target === itemNameRef.current) {
-              itemValueRef.current?.focus();
-              return;
-            }
-            handleAddItem();
-          }}
-          className="mt-2 rounded-xl border border-line bg-surface p-3 [@media(max-height:30rem)]:p-2.5"
-        >
-          {itemError ? (
+          {itemFormOpen ? (
             <div
-              role="alert"
-              aria-live="assertive"
-              className={`${errorBoxClass} mb-3`}
+              onKeyDown={(event) => {
+                // Enter dentro dos campos do item adiciona o item; sem isso o
+                // formulário inteiro seria enviado no meio da montagem da nota.
+                if (event.key !== "Enter") return;
+                if ((event.target as HTMLElement).tagName === "BUTTON") return;
+
+                event.preventDefault();
+                if (event.target === itemNameRef.current) {
+                  itemValueRef.current?.focus();
+                  return;
+                }
+                handleAddItem();
+              }}
+              className="mt-2 rounded-xl border border-line bg-surface p-3 [@media(max-height:30rem)]:p-2.5"
             >
-              <IconAlert size={18} className="mt-0.5 shrink-0" />
-              <span>{itemError}</span>
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-3 [@media(min-width:26rem)]:grid-cols-2 [@media(max-height:30rem)]:gap-2">
-            <div className="[@media(min-width:26rem)]:col-span-2">
-              <label htmlFor="item-nome" className={labelClass}>
-                Funcionário / item
-              </label>
-              <input
-                id="item-nome"
-                ref={itemNameRef}
-                type="text"
-                maxLength={80}
-                enterKeyHint="next"
-                autoComplete="off"
-                autoCapitalize="words"
-                value={itemName}
-                disabled={pending}
-                onChange={(event) => {
-                  setItemError(null);
-                  setItemName(event.target.value);
-                }}
-                placeholder="Ex.: Targino ou marmita"
-                className={`${inputClass} mt-1.5`}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="item-prato" className={labelClass}>
-                Prato
-              </label>
-              <select
-                id="item-prato"
-                value={itemDishTagId}
-                disabled={pending || dishTags.length === 0}
-                onChange={(event) => setItemDishTagId(event.target.value)}
-                className={`${inputClass} mt-1.5`}
-              >
-                <option value="">Sem prato</option>
-                {dishTags.map((tag) => (
-                  <option key={tag.id} value={tag.id}>
-                    {tag.name}
-                  </option>
-                ))}
-              </select>
-              {dishTags.length === 0 ? (
-                <p className="mt-1 text-[12px] text-ink-soft">
-                  Nenhum prato cadastrado ainda.
-                </p>
+              {itemError ? (
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  className={`${errorBoxClass} mb-3`}
+                >
+                  <IconAlert size={18} className="mt-0.5 shrink-0" />
+                  <span>{itemError}</span>
+                </div>
               ) : null}
-            </div>
 
-            <div>
-              <label htmlFor="item-valor" className={labelClass}>
-                Valor do item
-              </label>
-              <CurrencyInput
-                id="item-valor"
-                inputRef={itemValueRef}
-                value={itemValueCents}
-                onValueChange={(cents) => {
-                  setItemError(null);
-                  setItemValueCents(cents);
-                }}
-                disabled={pending}
-              />
-            </div>
-
-            <fieldset className="[@media(min-width:26rem)]:col-span-2">
-              <legend className={labelClass}>Baião</legend>
-              <div className="mt-1.5 grid grid-cols-3 gap-2">
-                {BAIAO_OPTIONS.map((option) => (
-                  <label
-                    key={option.value}
-                    className="relative flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line-strong bg-surface px-2 text-center text-[13px] font-medium text-ink transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand"
-                  >
-                    <input
-                      type="radio"
-                      name={baiaoGroupName}
-                      value={option.value}
-                      checked={itemBaiao === option.value}
-                      disabled={pending}
-                      onChange={() => setItemBaiao(option.value)}
-                      className="sr-only"
-                    />
-                    {option.label}
+              <div className="grid grid-cols-1 gap-3 [@media(min-width:26rem)]:grid-cols-2 [@media(max-height:30rem)]:gap-2">
+                <div className="[@media(min-width:26rem)]:col-span-2">
+                  <label htmlFor="item-nome" className={labelClass}>
+                    Funcionário / item
                   </label>
-                ))}
-              </div>
-            </fieldset>
-          </div>
+                  <input
+                    id="item-nome"
+                    ref={itemNameRef}
+                    type="text"
+                    maxLength={80}
+                    enterKeyHint="next"
+                    autoComplete="off"
+                    autoCapitalize="words"
+                    value={itemName}
+                    disabled={pending}
+                    onChange={(event) => {
+                      setItemError(null);
+                      setItemName(event.target.value);
+                    }}
+                    placeholder="Ex.: Targino ou marmita"
+                    className={`${inputClass} mt-1.5`}
+                  />
+                </div>
 
-          <Button
-            variant="secondary"
-            className="mt-3"
-            fullWidth
-            onClick={handleAddItem}
-            disabled={pending}
-          >
-            <IconPlus size={18} />
-            Adicionar item
-          </Button>
-        </div>
+                <div>
+                  <label htmlFor="item-prato" className={labelClass}>
+                    Prato
+                  </label>
+                  <select
+                    id="item-prato"
+                    value={itemDishTagId}
+                    disabled={pending || dishTags.length === 0}
+                    onChange={(event) => setItemDishTagId(event.target.value)}
+                    className={`${inputClass} mt-1.5`}
+                  >
+                    <option value="">Sem prato</option>
+                    {dishTags.map((tag) => (
+                      <option key={tag.id} value={tag.id}>
+                        {tag.name}
+                      </option>
+                    ))}
+                  </select>
+                  {dishTags.length === 0 ? (
+                    <p className="mt-1 text-[12px] text-ink-soft">
+                      Nenhum prato cadastrado ainda.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div>
+                  <label htmlFor="item-valor" className={labelClass}>
+                    Valor do item
+                  </label>
+                  <CurrencyInput
+                    id="item-valor"
+                    inputRef={itemValueRef}
+                    value={itemValueCents}
+                    onValueChange={(cents) => {
+                      setItemError(null);
+                      setItemValueCents(cents);
+                    }}
+                    disabled={pending}
+                  />
+                </div>
+
+                <fieldset className="[@media(min-width:26rem)]:col-span-2">
+                  <legend className={labelClass}>Baião</legend>
+                  <div className="mt-1.5 grid grid-cols-3 gap-2">
+                    {BAIAO_OPTIONS.map((option) => (
+                      <label
+                        key={option.value}
+                        className="relative flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line-strong bg-surface px-2 text-center text-[13px] font-medium text-ink transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand"
+                      >
+                        <input
+                          type="radio"
+                          name={baiaoGroupName}
+                          value={option.value}
+                          checked={itemBaiao === option.value}
+                          disabled={pending}
+                          onChange={() => setItemBaiao(option.value)}
+                          className="sr-only"
+                        />
+                        {option.label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              </div>
+
+              <div className="flex items-end gap-2 mt-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setItemFormOpen(false);
+                    resetItemForm();
+                  }}
+                  disabled={pending}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1"
+                  onClick={handleAddItem}
+                  disabled={pending}
+                >
+                  <IconPlus size={18} />
+                  Adicionar item
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setItemFormOpen(true);
+                itemNameRef.current?.focus();
+              }}
+              disabled={pending}
+              className="w-full"
+            >
+              <IconPlus size={18} />
+              + Funcionário / item
+            </Button>
+          )}
 
         {items.length > 0 ? (
           <>
