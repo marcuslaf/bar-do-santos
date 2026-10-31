@@ -159,20 +159,41 @@ export default async function FiltersPage({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[15px] leading-snug font-medium break-words text-ink">
-                      {order.customer_name}
-                    </p>
-                    {/* Mostrar funcionários que participaram do pedido */}
+                    {/* Mostrar funcionário principal (primeiro do pedido) como título principal */}
+                    {(() => {
+                      const primeiroFuncionario = orderItems
+                        .map((item) => item.funcionario)
+                        .find((f): f is string => Boolean(f));
+                      if (primeiroFuncionario) {
+                        return (
+                          <>
+                            <p className="text-[15px] leading-snug font-medium break-words text-ink">
+                              {primeiroFuncionario}
+                            </p>
+                            <p className="mt-0.5 text-[12px] text-ink-soft">
+                              {order.customer_name}
+                            </p>
+                          </>
+                        );
+                      }
+                      return (
+                        <p className="text-[15px] leading-snug font-medium break-words text-ink">
+                          {order.customer_name}
+                        </p>
+                      );
+                    })()}
+                    {/* Mostrar demais funcionários que participaram do pedido */}
                     {(() => {
                       const funcionarios = new Set(
                         orderItems
                           .map((item) => item.funcionario)
                           .filter((f): f is string => Boolean(f))
                       );
-                      if (funcionarios.size > 0) {
+                      const outros = Array.from(funcionarios).filter((f) => f !== orderItems[0]?.funcionario);
+                      if (outros.length > 0) {
                         return (
                           <p className="mt-0.5 text-[12px] text-ink-soft">
-                            {Array.from(funcionarios).join(" · ")}
+                            {outros.join(" · ")}
                           </p>
                         );
                       }
