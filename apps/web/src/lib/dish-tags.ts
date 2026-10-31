@@ -25,6 +25,7 @@ export interface OrderItemRow {
   "baião_option": BaiaoOption | null;
   unit_price_cents: number;
   created_at: string;
+  funcionario: string | null;
 }
 
 export const BAIAO_OPTION_LABEL: Record<BaiaoOption, string> = {

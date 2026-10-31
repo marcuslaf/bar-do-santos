@@ -158,7 +158,7 @@ export default async function FiltersPage({
                 className="block min-h-11 rounded-2xl border border-line bg-surface p-3.5 transition-colors duration-150 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 flex-1 text-[15px] leading-snug font-medium break-words text-ink">
+                  <p className="min-w-0 text-[15px] leading-snug font-medium break-words text-ink">
                     {order.customer_name}
                   </p>
                   <StatusBadge status={order.status} className="shrink-0" />
@@ -172,6 +172,9 @@ export default async function FiltersPage({
                     const baiaoLabel = item["baião_option"]
                       ? BAIAO_OPTION_LABEL[item["baião_option"]]
                       : "Baião não informado";
+                    const funcionario = item.funcionario
+                      ? item.funcionario
+                      : null;
 
                     return (
                       <li
@@ -181,6 +184,11 @@ export default async function FiltersPage({
                         <span className="font-medium break-words text-ink">
                           {dishName}
                         </span>
+                        {funcionario ? (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span className="text-ink-soft">{funcionario}</span>
+                          </>) : null}
                         <span aria-hidden>·</span>
                         <span>{baiaoLabel}</span>
                         <span aria-hidden>·</span>
@@ -234,14 +242,14 @@ function EmptyState({
             : "Peça ao dono para cadastrar os pratos do bar.",
       }
     : hasFilter
-      ? {
-          title: "Nenhuma nota com esse filtro",
-          body: "Nenhum item registrado combina com o prato e o baião escolhidos.",
-        }
-      : {
-          title: "Nenhum item registrado",
-          body: "Quando as notas tiverem itens com prato e baião, eles aparecem aqui.",
-        };
+    ? {
+        title: "Nenhuma nota com esse filtro",
+        body: "Nenhum item registrado combina com o prato e o baião escolhidos.",
+      }
+    : {
+        title: "Nenhum item registrado",
+        body: "Quando as notas tiverem itens com prato e baião, eles aparecem aqui.",
+      };
 
   return (
     <div className="mt-2 rounded-2xl border border-dashed border-line-strong bg-surface/60 px-5 py-9 text-center">
