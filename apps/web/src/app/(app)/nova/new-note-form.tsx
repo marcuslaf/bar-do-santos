@@ -12,7 +12,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { IconAlert, IconPlus, IconSpinner, IconX } from "@/components/ui/icons";
+import { IconAlert, IconPlus, IconSpinner, IconX, IconCheck } from "@/components/ui/icons";
+import { Modal } from "@/components/ui/modal";
 import { errorBoxClass, inputClass, labelClass } from "@/components/ui/styles";
 import { createOrder } from "@/lib/actions/orders";
 import { formatCents } from "@/lib/format";
@@ -29,6 +30,7 @@ type BaiaoChoice = BaiãoOption | "nao";
 
 interface DraftItem extends OrderItemInput {
   key: string;
+  funcionario?: string; // nome do funcionário que fez o pedido
 }
 
 interface Draft {
@@ -57,7 +59,8 @@ function itemMeta(item: DraftItem, dishTags: DishTagOption[]): string {
         ? "sem baião"
         : null;
 
-  return [dish, baiao].filter(Boolean).join(" · ") || "Sem prato definido";
+  const funcionario = item.funcionario ? ` · ${item.funcionario}` : "";
+  return [dish, baiao].filter(Boolean).join(" · ") + funcionario || "Sem prato definido";
 }
 
 export function NewNoteForm({
@@ -85,11 +88,22 @@ export function NewNoteForm({
   // Itens da nota (parte do cabeçalho, sempre visíveis)
   const [items, setItems] = useState<DraftItem[]>([]);
   const [itemName, setItemName] = useState("");
+  const [itemFuncionario, setItemFuncionario] = useState("");
   const [itemDishTagId, setItemDishTagId] = useState("");
   const [itemBaiao, setItemBaiao] = useState<BaiaoChoice>("nao");
   const [itemValueCents, setItemValueCents] = useState<number | null>(null);
   const [itemError, setItemError] = useState<string | null>(null);
   const [itemNameOpen, setItemNameOpen] = useState(false);
+
+  // Modal para adicionar funcionário/item
+  const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [modalFuncionario, setModalFuncionario] = useState("");
+  const [modalItemName, setModalItemName] = useState("");
+  const [modalItemDishTagId, setModalItemDishTagId] = useState("");
+  const [modalItemBaiao, setModalItemBaiao] = useState<BaiaoChoice>("nao");
+  const [modalItemValueCents, setModalItemValueCents] = useState<number | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [modalPending, setModalPending] = useState(false);
 
   // Recupera o rascunho quando o salvamento falhou depois de sair da tela.
   useEffect(() => {
@@ -148,22 +162,33 @@ export function NewNoteForm({
     return {
       key,
       itemName: itemName.trim(),
+      funcionario: itemName.trim(), // usa o nome do funcionário como nome do item
       dishTagId: itemDishTagId || null,
       baiãoOption: itemBaiao === "nao" ? null : itemBaiao,
       unitPriceCents: itemValueCents ?? 0,
     };
   }
 
+  function getDishNameById(id: string): string | undefined {
+    return dishTags.find((tag) => tag.id === id)?.name;
+  }
+
   function resetItemForm() {
     setItemName("");
+    setItemFuncionario("");
     setItemDishTagId("");
     setItemBaiao("nao");
     setItemValueCents(null);
     setItemError(null);
   }
 
-  function getDishNameById(id: string): string | undefined {
-    return dishTags.find((tag) => tag.id === id)?.name;
+  function resetModalForm() {
+    setModalFuncionario("");
+    setModalItemName("");
+    setModalItemDishTagId("");
+    setModalItemBaiao("nao");
+    setModalItemValueCents(null);
+    setModalError(null);
   }
 
   function handleAddItem() {
@@ -199,6 +224,60 @@ export function NewNoteForm({
     setItems((current) => current.filter((item) => item.key !== key));
   }
 
+  function openItemModal() {
+    resetModalForm();
+    setItemModalOpen(true);
+  }
+
+  function closeItemModal() {
+    setItemModalOpen(false);
+    resetModalForm();
+  }
+
+  async function handleAddItemModal() {
+    let name = modalItemName.trim();
+
+    // Se nome vazio mas prato selecionado, usa nome do prato
+    if (!name && modalItemDishTagId) {
+      const dishName = dishTags.find((t) => t.id === modalItemDishTagId)?.name;
+      if (dishName) {
+        setModalItemName(dishName);
+        name = dishName;
+      }
+    }
+
+    if (!name) {
+      setModalError("Informe o nome do item.");
+      return;
+    }
+    if (modalItemValueCents === null) {
+      setModalError("Informe o valor do item.");
+      return;
+    }
+    if (!modalFuncionario.trim()) {
+      setModalError("Informe o nome do funcionário.");
+      return;
+    }
+
+    setModalPending(true);
+
+    try {
+      const newItem: DraftItem = {
+        key: nextItemKey(),
+        itemName: name,
+        funcionario: modalFuncionario.trim(),
+        dishTagId: modalItemDishTagId || null,
+        baiãoOption: modalItemBaiao === "nao" ? null : modalItemBaiao,
+        unitPriceCents: modalItemValueCents ?? 0,
+      };
+
+      setItems((current) => [...current, newItem]);
+      closeItemModal();
+    } finally {
+      setModalPending(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
@@ -214,11 +293,9 @@ export function NewNoteForm({
     // Item digitado mas não adicionado à lista: inclui se estiver completo.
     // Considera item pendente se QUALQUER campo do item estiver preenchido
     // (nome, prato, valor ou baião), não apenas quando o campo nome está aberto.
-    // Se nome vazio mas prato selecionado, usa nome do prato.
-    if (!itemName.trim() && itemDishTagId) {
-      const dishName = dishTags.find((t) => t.id === itemDishTagId)?.name;
-      if (dishName) setItemName(dishName);
-    }
+    // Se nome vazio mas prato selecionado, usa nome do prato para validação e payload.
+    const effectiveItemName = itemName.trim() || 
+      (itemDishTagId ? dishTags.find((t) => t.id === itemDishTagId)?.name || "" : "");
 
     let submittedItems = items;
     const hasPendingItem =
@@ -228,7 +305,7 @@ export function NewNoteForm({
       itemBaiao !== "nao";
 
     if (hasPendingItem) {
-      if (!itemName.trim() || itemValueCents === null) {
+      if (!effectiveItemName || itemValueCents === null) {
         setError(
           "Complete o item em aberto (nome e valor) ou limpe esses campos.",
         );
@@ -236,7 +313,7 @@ export function NewNoteForm({
         return;
       }
 
-      submittedItems = [...items, itemFromForm("item-em-aberto")];
+      submittedItems = [...items, { ...itemFromForm("item-em-aberto"), itemName: effectiveItemName }];
     }
 
     const noteText = observations.trim();
@@ -382,9 +459,8 @@ export function NewNoteForm({
       </div>
 
       {/*
-       * Itens fazem parte do cabeçalho da nota: a seção é sempre visível, com
-       * um único formulário inline de captura. Não existe botão "+ item"
-       * separado nem seção colapsável.
+       * Itens da nota: seção sempre visível.
+       * Prato, Valor, Baião sempre visíveis; "Funcionário / item" via modal.
        */}
       <section
         aria-labelledby="itens-heading"
@@ -420,6 +496,77 @@ export function NewNoteForm({
           ) : null}
 
           <div className="grid grid-cols-1 gap-3 [@media(min-width:26rem)]:grid-cols-2 [@media(max-height:30rem)]:gap-2">
+            {/* Prato - sempre visível */}
+            <div>
+              <label htmlFor="item-prato" className={labelClass}>
+                Prato
+              </label>
+              <select
+                id="item-prato"
+                value={itemDishTagId}
+                disabled={pending || dishTags.length === 0}
+                onChange={(event) => setItemDishTagId(event.target.value)}
+                className={`${inputClass} mt-1.5`}
+              >
+                <option value="">Sem prato</option>
+                {dishTags.map((tag) => {
+                  return (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  );
+                })}
+              </select>
+              {dishTags.length === 0 ? (
+                <p className="mt-1 text-[12px] text-ink-soft">
+                  Nenhum prato cadastrado ainda.
+                </p>
+              ) : null}
+            </div>
+
+            {/* Valor do item - sempre visível */}
+            <div>
+              <label htmlFor="item-valor" className={labelClass}>
+                Valor do item
+              </label>
+              <CurrencyInput
+                id="item-valor"
+                inputRef={itemValueRef}
+                value={itemValueCents}
+                onValueChange={(cents) => {
+                  setItemError(null);
+                  setItemValueCents(cents);
+                }}
+                disabled={pending}
+              />
+            </div>
+
+            {/* Baião - sempre visível */}
+            <fieldset className="[@media(min-width:26rem)]:col-span-2">
+              <legend className={labelClass}>Baião</legend>
+              <div className="mt-1.5 grid grid-cols-3 gap-2">
+                {BAIAO_OPTIONS.map((option) => {
+                  return (
+                    <label
+                      key={option.value}
+                      className="relative flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line-strong bg-surface px-2 text-center text-[13px] font-medium text-ink transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand"
+                    >
+                      <input
+                        type="radio"
+                        name={baiaoGroupName}
+                        value={option.value}
+                        checked={itemBaiao === option.value}
+                        disabled={pending}
+                        onChange={() => setItemBaiao(option.value)}
+                        className="sr-only"
+                      />
+                      {option.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
             {/* Funcionário / item - retrátil */}
             <div className="[@media(min-width:26rem)]:col-span-2">
               {itemNameOpen ? (
@@ -457,78 +604,22 @@ export function NewNoteForm({
                 </Button>
                 )}
               </div>
-
-              {/* Prato, Valor, Baião - sempre visíveis */}
-              <div>
-                <label htmlFor="item-prato" className={labelClass}>
-                  Prato
-                </label>
-                <select
-                  id="item-prato"
-                  value={itemDishTagId}
-                  disabled={pending || dishTags.length === 0}
-                  onChange={(event) => setItemDishTagId(event.target.value)}
-                  className={`${inputClass} mt-1.5`}
-                >
-                  <option value="">Sem prato</option>
-                  {dishTags.map((tag) => {
-                    return (
-                      <option key={tag.id} value={tag.id}>
-                        {tag.name}
-                      </option>
-                    );
-                  })}
-                </select>
-                {dishTags.length === 0 ? (
-                  <p className="mt-1 text-[12px] text-ink-soft">
-                    Nenhum prato cadastrado ainda.
-                  </p>
-                ) : null}
-              </div>
-
-              <div>
-                <label htmlFor="item-valor" className={labelClass}>
-                  Valor do item
-                </label>
-                <CurrencyInput
-                  id="item-valor"
-                  inputRef={itemValueRef}
-                  value={itemValueCents}
-                  onValueChange={(cents) => {
-                    setItemError(null);
-                    setItemValueCents(cents);
-                  }}
-                  disabled={pending}
-                />
-              </div>
-
-              <fieldset className="[@media(min-width:26rem)]:col-span-2">
-                <legend className={labelClass}>Baião</legend>
-                <div className="mt-1.5 grid grid-cols-3 gap-2">
-                  {BAIAO_OPTIONS.map((option) => {
-                    return (
-                      <label
-                        key={option.value}
-                        className="relative flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line-strong bg-surface px-2 text-center text-[13px] font-medium text-ink transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand"
-                      >
-                        <input
-                          type="radio"
-                          name={baiaoGroupName}
-                          value={option.value}
-                          checked={itemBaiao === option.value}
-                          disabled={pending}
-                          onChange={() => setItemBaiao(option.value)}
-                          className="sr-only"
-                        />
-                        {option.label}
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
             </div>
 
-          {items.length > 0 ? (
+            <Button
+              variant="primary"
+              className="mt-3"
+              fullWidth
+              onClick={handleAddItem}
+              disabled={pending}
+            >
+              <IconPlus size={18} />
+              Adicionar item
+            </Button>
+          </div>
+
+        {/* Lista de itens adicionados */}
+        {items.length > 0 ? (
           <>
             <ul className="mt-3 space-y-2">
               {items.map((item) => (
@@ -572,8 +663,178 @@ export function NewNoteForm({
             Sem itens a nota fica sem valor definido na captura.
           </p>
         )}
-      </div>
+
+        {/* Botão para adicionar Funcionário / Item via modal */}
+        <div className="mt-4">
+          <Button
+            variant="ghost"
+            fullWidth
+            onClick={openItemModal}
+            disabled={pending}
+          >
+            <IconPlus size={18} />
+            + Funcionário / item
+          </Button>
+        </div>
       </section>
+
+      {/* Modal para adicionar Funcionário / Item */}
+      <Modal
+        open={itemModalOpen}
+        onClose={closeItemModal}
+        title="Adicionar Funcionário / Item"
+        description="Preencha os dados do funcionário e do item do pedido."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              className="flex-1"
+              onClick={closeItemModal}
+              disabled={modalPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              className="flex-1"
+              onClick={handleAddItemModal}
+              disabled={modalPending}
+            >
+              {modalPending ? (
+                <>
+                  <IconSpinner size={18} />
+                  Adicionando…
+                </>
+              ) : (
+                "Confirmar e adicionar"
+              )}
+            </Button>
+          </>
+        }
+      >
+        {modalError ? (
+          <div role="alert" aria-live="assertive" className={`${errorBoxClass} mb-4`}>
+            <IconAlert size={18} className="mt-0.5 shrink-0" />
+            <span>{modalError}</span>
+          </div>
+        ) : null}
+
+        <div className="space-y-4">
+          {/* Funcionário */}
+          <div>
+            <label htmlFor="modal-funcionario" className={labelClass}>
+              Funcionário
+            </label>
+            <input
+              id="modal-funcionario"
+              type="text"
+              maxLength={80}
+              enterKeyHint="next"
+              autoComplete="off"
+              autoCapitalize="words"
+              value={modalFuncionario}
+              disabled={modalPending}
+              onChange={(event) => {
+                setModalError(null);
+                setModalFuncionario(event.target.value);
+              }}
+              placeholder="Ex.: Targino"
+              className={`${inputClass} mt-1.5`}
+            />
+          </div>
+
+          {/* Item (nome do prato/funcionário) */}
+          <div>
+            <label htmlFor="modal-item-nome" className={labelClass}>
+              Item / Funcionário
+            </label>
+            <input
+              id="modal-item-nome"
+              ref={itemNameRef}
+              type="text"
+              maxLength={80}
+              enterKeyHint="next"
+              autoComplete="off"
+              autoCapitalize="words"
+              value={modalItemName}
+              disabled={modalPending}
+              onChange={(event) => {
+                setModalError(null);
+                setModalItemName(event.target.value);
+              }}
+              placeholder="Ex.: Targino ou marmita"
+              className={`${inputClass} mt-1.5`}
+            />
+          </div>
+
+          {/* Prato */}
+          <div>
+            <label htmlFor="modal-item-prato" className={labelClass}>
+              Prato
+            </label>
+            <select
+              id="modal-item-prato"
+              value={modalItemDishTagId}
+              disabled={modalPending || dishTags.length === 0}
+              onChange={(event) => setModalItemDishTagId(event.target.value)}
+              className={`${inputClass} mt-1.5`}
+            >
+              <option value="">Sem prato</option>
+              {dishTags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
+            {dishTags.length === 0 ? (
+              <p className="mt-1 text-[12px] text-ink-soft">
+                Nenhum prato cadastrado ainda.
+              </p>
+            ) : null}
+          </div>
+
+          {/* Valor do item */}
+          <div>
+            <label htmlFor="modal-item-valor" className={labelClass}>
+              Valor do item
+            </label>
+            <CurrencyInput
+              id="modal-item-valor"
+              inputRef={itemValueRef}
+              value={modalItemValueCents}
+              onValueChange={(cents) => {
+                setModalError(null);
+                setModalItemValueCents(cents);
+              }}
+              disabled={modalPending}
+            />
+          </div>
+
+          {/* Baião */}
+          <fieldset>
+            <legend className={labelClass}>Baião</legend>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {BAIAO_OPTIONS.map((option) => (
+                <label
+                  key={option.value}
+                  className="relative flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line-strong bg-surface px-2 text-center text-[13px] font-medium text-ink transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand"
+                >
+                  <input
+                    type="radio"
+                    name="modal-baiao-group"
+                    value={option.value}
+                    checked={modalItemBaiao === option.value}
+                    disabled={modalPending}
+                    onChange={() => setModalItemBaiao(option.value)}
+                    className="sr-only"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+      </Modal>
 
       {/*
        * Rodapé: só o botão Salvar, no fluxo. Em altura curta o `mt` cai para
