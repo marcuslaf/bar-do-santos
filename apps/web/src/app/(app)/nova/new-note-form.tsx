@@ -110,21 +110,40 @@ export function NewNoteForm({
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalPending, setModalPending] = useState(false);
 
-  // Carrega rascunhos do localStorage ao montar
+  /**
+   * Cleanup ao desmontar: remove rascunho do sessionStorage
+   */
   useEffect(() => {
-    const drafts = loadDraftItems();
-    if (drafts.length > 0) {
-      setItems(drafts);
-    }
+    return () => {
+      try {
+        sessionStorage.removeItem(DRAFT_KEY);
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // Ignora
+      }
+    };
   }, []);
 
-  // Limpa rascunho antigo ao montar (exceto quando há erro de salvamento anterior)
+  /**
+   * Gerencia rascunho no localStorage:
+   * - Limpa ao montar se não há erro (nova navegação)
+   * - Restaura apenas se houve erro anterior (para recuperar dados)
+   */
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const hasError = searchParams.has("erro");
+    const hasError = new URLSearchParams(window.location.search).has("erro");
     
-    if (!hasError) return;
+    if (!hasError) {
+      // Sem erro = limpa rascunho antigo ao montar
+      try {
+        sessionStorage.removeItem(DRAFT_KEY);
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // Ignora
+      }
+      return;
+    }
 
+    // Só restaura rascunho se houve erro anterior (para recuperar dados)
     try {
       const raw = sessionStorage.getItem(DRAFT_KEY);
       if (!raw) return;
