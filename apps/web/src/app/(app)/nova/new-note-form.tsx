@@ -292,6 +292,13 @@ export function NewNoteForm({
 
       setItems((current) => [...current, newItem]);
       closeItemModal();
+      // Limpa campos principais do formulário após adicionar via modal
+      setItemName("");
+      setItemDishTagId("");
+      setItemBaiao("nao");
+      setItemValueCents(null);
+      setItemError(null);
+      setItemNameOpen(false);
     } finally {
       setModalPending(false);
     }
