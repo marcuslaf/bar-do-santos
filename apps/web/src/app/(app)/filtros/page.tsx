@@ -158,9 +158,27 @@ export default async function FiltersPage({
                 className="block min-h-11 rounded-2xl border border-line bg-surface p-3.5 transition-colors duration-150 hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 text-[15px] leading-snug font-medium break-words text-ink">
-                    {order.customer_name}
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] leading-snug font-medium break-words text-ink">
+                      {order.customer_name}
+                    </p>
+                    {/* Mostrar funcionários que participaram do pedido */}
+                    {(() => {
+                      const funcionarios = new Set(
+                        orderItems
+                          .map((item) => item.funcionario)
+                          .filter((f): f is string => Boolean(f))
+                      );
+                      if (funcionarios.size > 0) {
+                        return (
+                          <p className="mt-0.5 text-[12px] text-ink-soft">
+                            {Array.from(funcionarios).join(" · ")}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
                   <StatusBadge status={order.status} className="shrink-0" />
                 </div>
 
