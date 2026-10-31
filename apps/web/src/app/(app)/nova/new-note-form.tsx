@@ -118,9 +118,12 @@ export function NewNoteForm({
     }
   }, []);
 
-  // Recupera o rascunho quando o salvamento falhou depois de sair da tela.
+  // Limpa rascunho antigo ao montar (exceto quando há erro de salvamento anterior)
   useEffect(() => {
-    if (!initialError) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasError = searchParams.has("erro");
+    
+    if (!hasError) return;
 
     try {
       const raw = sessionStorage.getItem(DRAFT_KEY);
