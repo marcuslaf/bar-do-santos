@@ -600,7 +600,7 @@ export function NewNoteForm({
                   className="w-full"
                 >
                   <IconPlus size={18} />
-                  + Funcionário / item
+                  Funcionário / item
                 </Button>
                 )}
               </div>
@@ -663,19 +663,6 @@ export function NewNoteForm({
             Sem itens a nota fica sem valor definido na captura.
           </p>
         )}
-
-        {/* Botão para adicionar Funcionário / Item via modal */}
-        <div className="mt-4">
-          <Button
-            variant="ghost"
-            fullWidth
-            onClick={openItemModal}
-            disabled={pending}
-          >
-            <IconPlus size={18} />
-            + Funcionário / item
-          </Button>
-        </div>
       </section>
 
       {/* Modal para adicionar Funcionário / Item */}
