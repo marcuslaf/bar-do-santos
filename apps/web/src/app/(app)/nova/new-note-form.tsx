@@ -374,6 +374,17 @@ export function NewNoteForm({
     try {
       const result = await saving;
       if (result.ok) {
+        // Limpa estado local antes de redirecionar
+        setItems([]);
+        setCustomerName("");
+        setObservations("");
+        setItemName("");
+        setItemDishTagId("");
+        setItemBaiao("nao");
+        setItemValueCents(null);
+        setItemError(null);
+        setItemNameOpen(false);
+        
         try {
           sessionStorage.removeItem(DRAFT_KEY);
         } catch {
