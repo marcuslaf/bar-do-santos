@@ -12,12 +12,13 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
-import { IconAlert, IconPlus, IconSpinner, IconX, IconCheck } from "@/components/ui/icons";
+import { IconAlert, IconPlus, IconSpinner, IconX, IconCheck, IconClock } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
 import { errorBoxClass, inputClass, labelClass } from "@/components/ui/styles";
 import { createOrder } from "@/lib/actions/orders";
 import { formatCents } from "@/lib/format";
 import type { BaiãoOption, OrderItemInput } from "@/lib/types";
+import { loadDraftItems, saveDraftItems, removeDraftItem, type DraftItem as DraftItemType } from "@/lib/draft-items";
 
 const DRAFT_KEY = "pedidos:nova-nota";
 
@@ -28,9 +29,14 @@ const DRAFT_KEY = "pedidos:nova-nota";
  */
 type BaiaoChoice = BaiãoOption | "nao";
 
-interface DraftItem extends OrderItemInput {
+interface LocalDraftItem {
   key: string;
-  funcionario?: string; // nome do funcionário que fez o pedido
+  itemName: string;
+  funcionario?: string;
+  dishTagId?: string | null;
+  baiãoOption?: "com" | "sem" | null;
+  unitPriceCents: number;
+  isDraft: true;
 }
 
 interface Draft {
@@ -50,7 +56,7 @@ const BAIAO_OPTIONS: { value: BaiaoChoice; label: string }[] = [
   { value: "nao", label: "Não informado" },
 ];
 
-function itemMeta(item: DraftItem, dishTags: DishTagOption[]): string {
+function itemMeta(item: DraftItemType, dishTags: DishTagOption[]): string {
   const dish = dishTags.find((tag) => tag.id === item.dishTagId)?.name;
   const baiao =
     item.baiãoOption === "com"
@@ -86,7 +92,7 @@ export function NewNoteForm({
   const [pending, setPending] = useState(false);
 
   // Itens da nota (parte do cabeçalho, sempre visíveis)
-  const [items, setItems] = useState<DraftItem[]>([]);
+  const [items, setItems] = useState<LocalDraftItem[]>([]);
   const [itemName, setItemName] = useState("");
   const [itemFuncionario, setItemFuncionario] = useState("");
   const [itemDishTagId, setItemDishTagId] = useState("");
@@ -95,7 +101,6 @@ export function NewNoteForm({
   const [itemError, setItemError] = useState<string | null>(null);
   const [itemNameOpen, setItemNameOpen] = useState(false);
 
-  // Modal para adicionar funcionário/item
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [modalFuncionario, setModalFuncionario] = useState("");
   const [modalItemName, setModalItemName] = useState("");
@@ -104,6 +109,14 @@ export function NewNoteForm({
   const [modalItemValueCents, setModalItemValueCents] = useState<number | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalPending, setModalPending] = useState(false);
+
+  // Carrega rascunhos do localStorage ao montar
+  useEffect(() => {
+    const drafts = loadDraftItems();
+    if (drafts.length > 0) {
+      setItems(drafts);
+    }
+  }, []);
 
   // Recupera o rascunho quando o salvamento falhou depois de sair da tela.
   useEffect(() => {
@@ -130,8 +143,9 @@ export function NewNoteForm({
           .map((item, index) => ({
             ...item,
             key: `rascunho-${index}`,
+            isDraft: true,
           }));
-        if (restored.length > 0) setItems(restored);
+        if (restored.length > 0) setItems(restored as LocalDraftItem[]);
       }
     } catch {
       // Rascunho indisponível: segue com o formulário limpo.
@@ -158,7 +172,7 @@ export function NewNoteForm({
   }
 
   /** Item montado a partir do formulário inline (só chamar após validar). */
-  function itemFromForm(key: string): DraftItem {
+  function itemFromForm(key: string): LocalDraftItem {
     return {
       key,
       itemName: itemName.trim(),
@@ -166,6 +180,7 @@ export function NewNoteForm({
       dishTagId: itemDishTagId || null,
       baiãoOption: itemBaiao === "nao" ? null : itemBaiao,
       unitPriceCents: itemValueCents ?? 0,
+      isDraft: true,
     };
   }
 
@@ -214,7 +229,8 @@ export function NewNoteForm({
       return;
     }
 
-    setItems((current) => [...current, itemFromForm(nextItemKey())]);
+    setItems((current) => [...current, itemFromForm(nextItemKey())] as LocalDraftItem[]);
+    saveDraftItems([...items, itemFromForm(nextItemKey())] as LocalDraftItem[]);
     resetItemForm();
     setItemNameOpen(true);
     itemNameRef.current?.focus();
@@ -222,6 +238,8 @@ export function NewNoteForm({
 
   function handleRemoveItem(key: string) {
     setItems((current) => current.filter((item) => item.key !== key));
+    const drafts = loadDraftItems();
+    saveDraftItems(drafts.filter((item) => item.key !== key) as LocalDraftItem[]);
   }
 
   function openItemModal() {
@@ -262,13 +280,14 @@ export function NewNoteForm({
     setModalPending(true);
 
     try {
-      const newItem: DraftItem = {
+      const newItem: LocalDraftItem = {
         key: nextItemKey(),
         itemName: name,
         funcionario: modalFuncionario.trim(),
         dishTagId: modalItemDishTagId || null,
         baiãoOption: modalItemBaiao === "nao" ? null : modalItemBaiao,
         unitPriceCents: modalItemValueCents ?? 0,
+        isDraft: true,
       };
 
       setItems((current) => [...current, newItem]);
@@ -313,7 +332,7 @@ export function NewNoteForm({
         return;
       }
 
-      submittedItems = [...items, { ...itemFromForm("item-em-aberto"), itemName: effectiveItemName }];
+      submittedItems = [...items, { ...itemFromForm("item-em-aberto"), itemName: effectiveItemName } as LocalDraftItem];
     }
 
     const noteText = observations.trim();
@@ -322,6 +341,7 @@ export function NewNoteForm({
       dishTagId: item.dishTagId,
       baiãoOption: item.baiãoOption,
       unitPriceCents: item.unitPriceCents,
+      funcionario: item.funcionario ?? null,
     }));
 
     setError(null);

@@ -52,6 +52,7 @@ export interface OrderItemInput {
   dishTagId?: string | null;
   baiãoOption?: BaiãoOption | null;
   unitPriceCents: number;
+  funcionario?: string | null;
 }
 
 export interface ActionResult<T = undefined> {

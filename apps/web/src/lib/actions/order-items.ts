@@ -27,6 +27,7 @@ const itemSchema = z.object({
     .int("Valor inválido.")
     .min(0, "Valor não pode ser negativo.")
     .max(MAX_ITEM_CENTS, "Valor acima do limite permitido."),
+  funcionario: z.string().trim().max(80, "Nome do funcionário muito longo (máx. 80).").nullable().optional(),
 });
 
 const createSchema = itemSchema.extend({
@@ -71,6 +72,7 @@ export async function createOrderItem(input: {
   dishTagId?: string | null;
   baiãoOption?: BaiãoOption | null;
   unitPriceCents: number;
+  funcionario?: string | null;
 }): Promise<ActionResult<{ id: string }>> {
   const session = await getSession();
   if (!session) return failure("Sessão expirada. Entre novamente.");
@@ -90,6 +92,7 @@ export async function createOrderItem(input: {
       dish_tag_id: parsed.data.dishTagId ?? null,
       "baião_option": parsed.data.baiãoOption ?? null,
       unit_price_cents: parsed.data.unitPriceCents,
+      funcionario: parsed.data.funcionario ?? null,
     })
     .select("id")
     .single<{ id: string }>();
@@ -106,6 +109,7 @@ export async function updateOrderItem(input: {
   dishTagId?: string | null;
   baiãoOption?: BaiãoOption | null;
   unitPriceCents: number;
+  funcionario?: string | null;
 }): Promise<ActionResult> {
   const session = await getSession();
   if (!session) return failure("Sessão expirada. Entre novamente.");
@@ -123,6 +127,7 @@ export async function updateOrderItem(input: {
       dish_tag_id: parsed.data.dishTagId ?? null,
       "baião_option": parsed.data.baiãoOption ?? null,
       unit_price_cents: parsed.data.unitPriceCents,
+      funcionario: parsed.data.funcionario ?? null,
     })
     .eq("id", parsed.data.id)
     .select("order_id")

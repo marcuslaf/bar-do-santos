@@ -29,6 +29,7 @@ const itemSchema = z.object({
   dishTagId: z.string().uuid("Tag inválida.").nullable().optional(),
   baiãoOption: z.enum(["com", "sem"]).nullable().optional(),
   unitPriceCents: moneySchema,
+  funcionario: z.string().trim().max(80, "Nome do funcionário muito longo (máx. 80).").nullable().optional(),
 });
 
 const createSchema = z.object({
@@ -137,6 +138,7 @@ export async function createOrder(input: {
         dish_tag_id: item.dishTagId ?? null,
         "baião_option": item.baiãoOption ?? null,
         unit_price_cents: item.unitPriceCents,
+        funcionario: item.funcionario ?? null,
       })),
     );
 
