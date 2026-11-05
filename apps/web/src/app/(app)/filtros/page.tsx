@@ -159,28 +159,10 @@ export default async function FiltersPage({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    {/* Empresa/cliente primeiro; os funcionários do pedido vêm abaixo. */}
+                    {/* Empresa/cliente; o funcionário vem na linha do item. */}
                     <p className="text-[15px] leading-snug font-medium break-words text-ink">
                       {order.customer_name}
                     </p>
-                    {(() => {
-                      const funcionarios = Array.from(
-                        new Set(
-                          orderItems
-                            .map((item) => item.funcionario)
-                            .filter((f): f is string => Boolean(f)),
-                        ),
-                      );
-                      if (funcionarios.length === 0) return null;
-                      return funcionarios.map((funcionario) => (
-                        <p
-                          key={funcionario}
-                          className="mt-0.5 text-[12px] text-ink-soft"
-                        >
-                          {funcionario}
-                        </p>
-                      ));
-                    })()}
                   </div>
                   <StatusBadge status={order.status} className="shrink-0" />
                 </div>
@@ -193,26 +175,24 @@ export default async function FiltersPage({
                     const baiaoLabel = item["baião_option"]
                       ? BAIAO_OPTION_LABEL[item["baião_option"]]
                       : "Baião não informado";
-                    const funcionario = item.funcionario
-                      ? item.funcionario
-                      : null;
 
                     return (
                       <li
                         key={item.id}
                         className="flex flex-wrap items-baseline gap-x-1.5 text-[13px] leading-snug text-ink-soft"
                       >
+                        {item.funcionario ? (
+                          <>
+                            <span className="break-words">{item.funcionario}</span>
+                            <span aria-hidden>-</span>
+                          </>
+                        ) : null}
                         <span className="font-medium break-words text-ink">
                           {dishName}
                         </span>
-                        {funcionario ? (
-                          <>
-                            <span aria-hidden>·</span>
-                            <span className="text-ink-soft">{funcionario}</span>
-                          </>) : null}
-                        <span aria-hidden>·</span>
+                        <span aria-hidden>-</span>
                         <span>{baiaoLabel}</span>
-                        <span aria-hidden>·</span>
+                        <span aria-hidden>-</span>
                         <span className="tabular">
                           {formatCents(item.unit_price_cents)}
                         </span>
