@@ -50,7 +50,7 @@ export default async function NewNotePage({
       </div>
 
       <p className="mt-1.5 text-[13px] text-ink-soft [@media(max-height:30rem)]:hidden [@media(max-width:22.5rem)]:hidden">
-        Nome do cliente, pedido e salvar. Os itens e o valor são opcionais.
+        Cliente, observações e salvar. Os itens e o valor são opcionais.
       </p>
 
       <NewNoteForm

@@ -28,14 +28,14 @@ export function BottomNav({ role }: { role: MemberRole }) {
             href={href}
             aria-current={active ? "page" : undefined}
             className={[
-              "flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 text-[11px] font-semibold tracking-[0.06em] uppercase transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand [@media(max-height:30rem)]:min-h-12",
+              "flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[12px] font-semibold whitespace-nowrap transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand [@media(max-height:30rem)]:min-h-12",
               active
                 ? "bg-brand-soft text-brand-ink"
                 : "text-ink-soft hover:bg-surface-2 hover:text-ink",
             ].join(" ")}
           >
             <Icon size={22} />
-            {label}
+            <span className="min-w-0 max-w-full truncate">{label}</span>
           </Link>
         ))}
       </div>

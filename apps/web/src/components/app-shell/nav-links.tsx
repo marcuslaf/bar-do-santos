@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
-import { IconCash, IconNote, IconPlus, IconSearch, IconUsers } from "@/components/ui/icons";
+import { IconCash, IconNote, IconSearch, IconUsers } from "@/components/ui/icons";
 import type { MemberRole } from "@/lib/types";
 
 /** Ícone aceita `size`/`className`; restringe o tipo ao que a nav consome. */
@@ -52,13 +52,10 @@ export function useNavItems(role: MemberRole): NavItem[] {
       Icon: IconUsers,
       active: pathname.startsWith("/equipe"),
     });
-    items.push({
-      href: "/tags",
-      label: "Pratos",
-      Icon: IconPlus,
-      active: pathname.startsWith("/tags"),
-    });
   }
 
+  // "Pratos" (/tags) não é destino de primeiro nível: entra pelo bloco
+  // "Catálogo" em /filtros (só owner). Com 5 destinos a barra móvel
+  // sobrepunha as etiquetas em 320px.
   return items;
 }

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { CurrencyInput } from "@/components/ui/currency-input";
 import { IconAlert, IconPlus, IconSpinner, IconX, IconCheck, IconClock } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
-import { errorBoxClass, inputClass, labelClass } from "@/components/ui/styles";
+import { buttonClass, errorBoxClass, inputClass, labelClass } from "@/components/ui/styles";
 import { createOrder } from "@/lib/actions/orders";
 import { formatCents } from "@/lib/format";
 import type { BaiãoOption, OrderItemInput } from "@/lib/types";
@@ -84,6 +84,7 @@ export function NewNoteForm({
   const observationsRef = useRef<HTMLTextAreaElement>(null);
   const itemNameRef = useRef<HTMLInputElement>(null);
   const itemValueRef = useRef<HTMLInputElement>(null);
+  const addAnotherRef = useRef<HTMLButtonElement>(null);
   const itemKeyRef = useRef(0);
 
   const [customerName, setCustomerName] = useState("");
@@ -100,6 +101,12 @@ export function NewNoteForm({
   const [itemValueCents, setItemValueCents] = useState<number | null>(null);
   const [itemError, setItemError] = useState<string | null>(null);
   const [itemNameOpen, setItemNameOpen] = useState(false);
+  /**
+   * Editor de item aberto por padrão (primeiro item). Depois de salvar o
+   * primeiro item ele vira a linha "+ Adicionar outro item": a nota típica tem
+   * um item só e o formulário inteiro volta a caber na dobra.
+   */
+  const [itemEditorOpen, setItemEditorOpen] = useState(true);
 
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [modalFuncionario, setModalFuncionario] = useState("");
@@ -182,6 +189,11 @@ export function NewNoteForm({
     element.style.height = `${element.scrollHeight}px`;
   }, [observations]);
 
+  // O editor some ao salvar o item: o foco não pode cair no <body>.
+  useEffect(() => {
+    if (!itemEditorOpen) addAnotherRef.current?.focus();
+  }, [itemEditorOpen]);
+
   function focusObservations(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter") return;
     event.preventDefault();
@@ -254,12 +266,16 @@ export function NewNoteForm({
     setItems((current) => [...current, itemFromForm(nextItemKey())] as LocalDraftItem[]);
     saveDraftItems([...items, itemFromForm(nextItemKey())] as LocalDraftItem[]);
     resetItemForm();
+    // Mantém o campo de nome pronto para o próximo item, quando o editor reabrir.
     setItemNameOpen(true);
-    itemNameRef.current?.focus();
+    setItemEditorOpen(false);
   }
 
   function handleRemoveItem(key: string) {
-    setItems((current) => current.filter((item) => item.key !== key));
+    const remaining = items.filter((item) => item.key !== key);
+    setItems(remaining);
+    // Sem itens, o editor reabre: a nota volta a ter um item para informar.
+    if (remaining.length === 0) setItemEditorOpen(true);
     const drafts = loadDraftItems();
     saveDraftItems(drafts.filter((item) => item.key !== key) as LocalDraftItem[]);
   }
@@ -448,7 +464,7 @@ export function NewNoteForm({
     <form
       onSubmit={handleSubmit}
       noValidate
-      className="mt-4 [@media(max-height:30rem)]:mt-2 md:max-w-lg"
+      className="mt-4 pb-20 [@media(max-height:30rem)]:mt-2 md:max-w-lg md:pb-0"
     >
       {error ? (
         <div
@@ -519,8 +535,11 @@ export function NewNoteForm({
       </div>
 
       {/*
-       * Itens da nota: seção sempre visível.
-       * Prato, Valor, Baião sempre visíveis; "Funcionário / item" via modal.
+       * Itens da nota: o editor abre no primeiro item e, depois de salvo,
+       * encolhe para a linha "+ Adicionar outro item". A nota típica tem um
+       * item só — encolher devolve a dobra e elimina o card aninhado.
+       * Prato, Valor e Baião ficam sempre visíveis; "Funcionário / item" abre
+       * em um toque.
        */}
       <section
         aria-labelledby="itens-heading"
@@ -530,158 +549,10 @@ export function NewNoteForm({
           Itens da nota
         </h2>
 
-        <div
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
-            if ((event.target as HTMLElement).tagName === "BUTTON") return;
-
-            event.preventDefault();
-            if (event.target === itemNameRef.current) {
-              itemValueRef.current?.focus();
-              return;
-            }
-            handleAddItem();
-          }}
-          className="mt-2 rounded-xl border border-line bg-surface p-3 [@media(max-height:30rem)]:p-2.5"
-        >
-          {itemError ? (
-            <div
-              role="alert"
-              aria-live="assertive"
-              className={`${errorBoxClass} mb-3`}
-            >
-              <IconAlert size={18} className="mt-0.5 shrink-0" />
-              <span>{itemError}</span>
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-1 gap-3 [@media(min-width:26rem)]:grid-cols-2 [@media(max-height:30rem)]:gap-2">
-            {/* Prato - sempre visível */}
-            <div>
-              <label htmlFor="item-prato" className={labelClass}>
-                Prato
-              </label>
-              <select
-                id="item-prato"
-                value={itemDishTagId}
-                disabled={pending || dishTags.length === 0}
-                onChange={(event) => setItemDishTagId(event.target.value)}
-                className={`${inputClass} mt-1.5`}
-              >
-                <option value="">Sem prato</option>
-                {dishTags.map((tag) => {
-                  return (
-                    <option key={tag.id} value={tag.id}>
-                      {tag.name}
-                    </option>
-                  );
-                })}
-              </select>
-              {dishTags.length === 0 ? (
-                <p className="mt-1 text-[12px] text-ink-soft">
-                  Nenhum prato cadastrado ainda.
-                </p>
-              ) : null}
-            </div>
-
-            {/* Valor do item - sempre visível */}
-            <div>
-              <label htmlFor="item-valor" className={labelClass}>
-                Valor do item
-              </label>
-              <CurrencyInput
-                id="item-valor"
-                inputRef={itemValueRef}
-                value={itemValueCents}
-                onValueChange={(cents) => {
-                  setItemError(null);
-                  setItemValueCents(cents);
-                }}
-                disabled={pending}
-              />
-            </div>
-
-            {/* Baião - sempre visível */}
-            <fieldset className="[@media(min-width:26rem)]:col-span-2">
-              <legend className={labelClass}>Baião</legend>
-              <div className="mt-1.5 grid grid-cols-3 gap-2">
-                {BAIAO_OPTIONS.map((option) => {
-                  return (
-                    <label
-                      key={option.value}
-                      className="relative flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line-strong bg-surface px-2 text-center text-[13px] font-medium text-ink transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand"
-                    >
-                      <input
-                        type="radio"
-                        name={baiaoGroupName}
-                        value={option.value}
-                        checked={itemBaiao === option.value}
-                        disabled={pending}
-                        onChange={() => setItemBaiao(option.value)}
-                        className="sr-only"
-                      />
-                      {option.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-
-            {/* Funcionário / item - retrátil */}
-            <div className="[@media(min-width:26rem)]:col-span-2">
-              {itemNameOpen ? (
-                <>
-                  <label htmlFor="item-nome" className={labelClass}>
-                    Funcionário / item
-                  </label>
-                  <input
-                    id="item-nome"
-                    ref={itemNameRef}
-                    type="text"
-                    maxLength={80}
-                    enterKeyHint="next"
-                    autoComplete="off"
-                    autoCapitalize="words"
-                    value={itemName}
-                    disabled={pending}
-                    onChange={(event) => {
-                      setItemError(null);
-                      setItemName(event.target.value);
-                    }}
-                    placeholder="Ex.: Targino ou marmita"
-                    className={`${inputClass} mt-1.5`}
-                  />
-                </>
-              ) : (
-                <Button
-                  variant="ghost"
-                  onClick={() => setItemNameOpen(true)}
-                  disabled={pending}
-                  className="w-full"
-                >
-                  <IconPlus size={18} />
-                  Funcionário / item
-                </Button>
-                )}
-              </div>
-            </div>
-
-            <Button
-              variant="primary"
-              className="mt-3"
-              fullWidth
-              onClick={handleAddItem}
-              disabled={pending}
-            >
-              <IconPlus size={18} />
-              Adicionar item
-            </Button>
-          </div>
-
         {/* Lista de itens adicionados */}
         {items.length > 0 ? (
           <>
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-2 space-y-2">
               {items.map((item) => (
                 <li
                   key={item.key}
@@ -718,11 +589,175 @@ export function NewNoteForm({
               O total da nota é a soma dos itens.
             </p>
           </>
+        ) : null}
+
+        {itemEditorOpen ? (
+          <div
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              if ((event.target as HTMLElement).tagName === "BUTTON") return;
+
+              event.preventDefault();
+              if (event.target === itemNameRef.current) {
+                itemValueRef.current?.focus();
+                return;
+              }
+              handleAddItem();
+            }}
+            className="mt-3 [@media(max-height:30rem)]:mt-2"
+          >
+            {itemError ? (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className={`${errorBoxClass} mb-3`}
+              >
+                <IconAlert size={18} className="mt-0.5 shrink-0" />
+                <span>{itemError}</span>
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-1 gap-3 [@media(min-width:26rem)]:grid-cols-2 [@media(max-height:30rem)]:gap-2">
+              {/* Prato - sempre visível */}
+              <div>
+                <label htmlFor="item-prato" className={labelClass}>
+                  Prato
+                </label>
+                <select
+                  id="item-prato"
+                  value={itemDishTagId}
+                  disabled={pending || dishTags.length === 0}
+                  onChange={(event) => setItemDishTagId(event.target.value)}
+                  className={`${inputClass} mt-1.5`}
+                >
+                  <option value="">Sem prato</option>
+                  {dishTags.map((tag) => {
+                    return (
+                      <option key={tag.id} value={tag.id}>
+                        {tag.name}
+                      </option>
+                    );
+                  })}
+                </select>
+                {dishTags.length === 0 ? (
+                  <p className="mt-1 text-[12px] text-ink-soft">
+                    Nenhum prato cadastrado ainda.
+                  </p>
+                ) : null}
+              </div>
+
+              {/* Valor do item - sempre visível */}
+              <div>
+                <label htmlFor="item-valor" className={labelClass}>
+                  Valor do item
+                </label>
+                <CurrencyInput
+                  id="item-valor"
+                  inputRef={itemValueRef}
+                  value={itemValueCents}
+                  onValueChange={(cents) => {
+                    setItemError(null);
+                    setItemValueCents(cents);
+                  }}
+                  disabled={pending}
+                />
+              </div>
+
+              {/* Baião - sempre visível */}
+              <fieldset className="[@media(min-width:26rem)]:col-span-2">
+                <legend className={labelClass}>Baião</legend>
+                <div className="mt-1.5 grid grid-cols-3 gap-2">
+                  {BAIAO_OPTIONS.map((option) => {
+                    return (
+                      <label
+                        key={option.value}
+                        className="relative flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-line-strong bg-surface px-2 text-center text-[13px] font-medium text-ink transition-colors duration-150 has-[:checked]:border-brand has-[:checked]:bg-brand-soft has-[:checked]:text-brand-ink focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand"
+                      >
+                        <input
+                          type="radio"
+                          name={baiaoGroupName}
+                          value={option.value}
+                          checked={itemBaiao === option.value}
+                          disabled={pending}
+                          onChange={() => setItemBaiao(option.value)}
+                          className="sr-only"
+                        />
+                        {option.label}
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              {/* Funcionário / item - retrátil */}
+              <div className="[@media(min-width:26rem)]:col-span-2">
+                {itemNameOpen ? (
+                  <>
+                    <label htmlFor="item-nome" className={labelClass}>
+                      Funcionário / item
+                    </label>
+                    <input
+                      id="item-nome"
+                      ref={itemNameRef}
+                      type="text"
+                      maxLength={80}
+                      enterKeyHint="next"
+                      autoComplete="off"
+                      autoCapitalize="words"
+                      value={itemName}
+                      disabled={pending}
+                      onChange={(event) => {
+                        setItemError(null);
+                        setItemName(event.target.value);
+                      }}
+                      placeholder="Ex.: Targino ou marmita"
+                      className={`${inputClass} mt-1.5`}
+                    />
+                  </>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    onClick={() => setItemNameOpen(true)}
+                    disabled={pending}
+                    className="w-full"
+                  >
+                    <IconPlus size={18} />
+                    Funcionário / item
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Secundário: o único caminho primário da tela é "Salvar nota". */}
+            <Button
+              variant="secondary"
+              className="mt-3"
+              fullWidth
+              onClick={handleAddItem}
+              disabled={pending}
+            >
+              <IconPlus size={18} />
+              Adicionar item
+            </Button>
+          </div>
         ) : (
+          <button
+            ref={addAnotherRef}
+            type="button"
+            onClick={() => setItemEditorOpen(true)}
+            disabled={pending}
+            className={`${buttonClass({ variant: "secondary", fullWidth: true })} mt-3`}
+          >
+            <IconPlus size={18} />
+            Adicionar outro item
+          </button>
+        )}
+
+        {items.length === 0 && itemEditorOpen ? (
           <p className="mt-2 text-[13px] text-ink-soft">
             Sem itens a nota fica sem valor definido na captura.
           </p>
-        )}
+        ) : null}
       </section>
 
       {/* Modal para adicionar Funcionário / Item */}
@@ -884,11 +919,40 @@ export function NewNoteForm({
       </Modal>
 
       {/*
-       * Rodapé: só o botão Salvar, no fluxo. Em altura curta o `mt` cai para
-       * 8px, o que mantém a ação primária alcançável sem barra fixa cobrindo
-       * campos em 667x375 e 844x390.
+       * Celular: a ação primária é fixa acima da navegação inferior, então
+       * "Salvar nota" nunca fica fora da dobra (320x568, 667x375). O resumo
+       * repete o que já está calculado — nada novo é digitado aqui.
        */}
-      <div className="mt-4 [@media(max-height:30rem)]:mt-2">
+      <div className="fixed inset-x-0 bottom-[calc(5.5rem_+_env(safe-area-inset-bottom))] z-20 md:hidden">
+        <div className="mx-auto w-full max-w-3xl px-4">
+          <div className="flex items-center gap-3 rounded-2xl border border-line bg-paper/95 p-1.5 pl-4 shadow-float backdrop-blur-md">
+            <p
+              aria-live="polite"
+              className="tabular min-w-0 flex-1 truncate text-[13px] text-ink-soft"
+            >
+              {items.length > 0
+                ? `${items.length} ${items.length === 1 ? "item" : "itens"} · ${formatCents(itemsTotalCents)}`
+                : "Sem itens · valor opcional"}
+            </p>
+            <Button type="submit" className="shrink-0" disabled={pending}>
+              {pending ? (
+                <>
+                  <IconSpinner size={18} />
+                  Salvando…
+                </>
+              ) : (
+                "Salvar nota"
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/*
+       * Rodapé do desktop: em celular a ação vive na barra fixa acima da
+       * navegação, então este bloco só existe a partir de md.
+       */}
+      <div className="mt-4 hidden md:block">
         <Button type="submit" size="lg" fullWidth disabled={pending}>
           {pending ? (
             <>
