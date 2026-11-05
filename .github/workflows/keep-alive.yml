@@ -1,0 +1,57 @@
+name: Supabase keep-alive
+
+# O plano free do Supabase pausa projetos com baixa atividade ao longo de 7 dias.
+# Uma consulta trivial por dia mantém o projeto acima do limiar de inatividade.
+#
+# Requisitos (repository secrets):
+#   SUPABASE_URL       -> https://<ref>.supabase.co
+#   SUPABASE_ANON_KEY  -> chave anon (pública, já vai no bundle do navegador)
+#
+# Observação: o GitHub desativa workflows agendados após 60 dias sem atividade
+# no repositório. Qualquer commit reativa o agendamento.
+
+on:
+  schedule:
+    # Todo dia às 09:00 UTC (06:00 em America/Sao_Paulo).
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Consulta trivial no banco
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Consultar o PostgREST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::error::Defina os secrets SUPABASE_URL e SUPABASE_ANON_KEY no repositório."
+            exit 1
+          fi
+
+          # A RLS devolve lista vazia para o anon, mas a query roda no Postgres —
+          # é isso que conta como atividade do banco.
+          code=$(curl -sS -o /tmp/body -w "%{http_code}" \
+            --max-time 30 \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/orgs?select=id&limit=1")
+
+          echo "HTTP ${code}"
+          echo "Resposta: $(cat /tmp/body)"
+
+          if [ "${code}" != "200" ]; then
+            echo "::error::Keep-alive falhou com HTTP ${code}. O projeto pode estar pausado — restaure no Dashboard do Supabase."
+            exit 1
+          fi
+
+          echo "Projeto ativo."
