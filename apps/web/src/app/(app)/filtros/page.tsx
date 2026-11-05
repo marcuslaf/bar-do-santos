@@ -172,11 +172,14 @@ export default async function FiltersPage({
                         ),
                       );
                       if (funcionarios.length === 0) return null;
-                      return (
-                        <p className="mt-0.5 text-[12px] text-ink-soft">
-                          {funcionarios.join(" · ")}
+                      return funcionarios.map((funcionario) => (
+                        <p
+                          key={funcionario}
+                          className="mt-0.5 text-[12px] text-ink-soft"
+                        >
+                          {funcionario}
                         </p>
-                      );
+                      ));
                     })()}
                   </div>
                   <StatusBadge status={order.status} className="shrink-0" />
