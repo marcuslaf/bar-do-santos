@@ -132,3 +132,4 @@ pnpm-debug.log*
 
 # Artefatos do Playwright MCP (screenshots/logs de verificacao)
 .playwright-mcp/
+.vercel
