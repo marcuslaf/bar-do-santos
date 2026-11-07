@@ -19,10 +19,13 @@ export function supabaseAnonKey(): string {
 }
 
 export function supabaseServiceRoleKey(): string {
-  const value = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // 2026: Supabase emite chaves no formato novo (sb_secret_…); o nome legado
+  // continua aceito para não quebrar ambientes ainda não migrados.
+  const value =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
   if (!value) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY não configurada no servidor. Nunca use o prefixo NEXT_PUBLIC_ nesta chave.",
+      "SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_SECRET_KEY) não configurada no servidor. Nunca use o prefixo NEXT_PUBLIC_ nesta chave.",
     );
   }
   return value;
