@@ -1,57 +1,53 @@
 name: Supabase keep-alive
 
 # O plano free do Supabase pausa projetos com baixa atividade ao longo de 7 dias.
-# Uma consulta trivial por dia mantém o projeto acima do limiar de inatividade.
+# Este workflow não só consulta o banco: ele também **restaura** o projeto quando
+# encontra ele pausado (via Management API), e grava um batimento no repositório
+# para o GitHub não desligar o cron em repositório público sem atividade por 60 dias.
 #
 # Requisitos (repository secrets):
-#   SUPABASE_URL       -> https://<ref>.supabase.co
-#   SUPABASE_ANON_KEY  -> chave anon (pública, já vai no bundle do navegador)
+#   SUPABASE_ACCESS_TOKEN -> PAT da Management API (https://supabase.com/dashboard/account/tokens)
+#                            com permissão de leitura + restore NESTE projeto.
+#   SUPABASE_URL          -> https://<ref>.supabase.co
+#   SUPABASE_ANON_KEY     -> chave anon/publishable (pública, já vai no bundle do navegador)
+#   SUPABASE_PROJECT_REF  -> (opcional) ref do projeto; se omitido, é derivado da URL.
 #
-# Observação: o GitHub desativa workflows agendados após 60 dias sem atividade
-# no repositório. Qualquer commit reativa o agendamento.
+# Observação: o workflow roda em repositório público. Secrets NÃO são expostos em
+# pull requests de forks (o GitHub não passa secrets para forks), e o workflow não
+# tem gatilho de pull_request. Mesmo assim, prefira um PAT com escopo restrito
+# apenas ao projeto bar-do-santos.
 
 on:
   schedule:
-    # Todo dia às 09:00 UTC (06:00 em America/Sao_Paulo).
-    - cron: "0 9 * * *"
+    # A cada 6 horas. O GitHub pode atrasar o disparo em horário de pico;
+    # a margem de 6h cobre os 7 dias de inatividade com folga.
+    - cron: "23 */6 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+  issues: write
+
+concurrency:
+  group: supabase-keep-alive
+  cancel-in-progress: false
 
 jobs:
-  ping:
-    name: Consulta trivial no banco
+  keep-alive:
+    name: Manter o projeto ativo
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
 
     steps:
-      - name: Consultar o PostgREST
+      - name: Verificar status, restaurar se pausado e pingar o banco
         env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          set -euo pipefail
-
-          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
-            echo "::error::Defina os secrets SUPABASE_URL e SUPABASE_ANON_KEY no repositório."
-            exit 1
-          fi
-
-          # A RLS devolve lista vazia para o anon, mas a query roda no Postgres —
-          # é isso que conta como atividade do banco.
-          code=$(curl -sS -o /tmp/body -w "%{http_code}" \
-            --max-time 30 \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            "${SUPABASE_URL}/rest/v1/orgs?select=id&limit=1")
-
-          echo "HTTP ${code}"
-          echo "Resposta: $(cat /tmp/body)"
-
-          if [ "${code}" != "200" ]; then
-            echo "::error::Keep-alive falhou com HTTP ${code}. O projeto pode estar pausado — restaure no Dashboard do Supabase."
-            exit 1
-          fi
-
-          echo "Projeto ativo."
+          set -uo pipefail
+          chmod +x .github/scripts/keep-alive.sh
+          .github/scripts/keep-alive.sh

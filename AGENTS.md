@@ -63,6 +63,8 @@ supabase/
 - `password_attempts` — contador de falhas de senha atual por usuário (5 em 15 min).
   Sem policy: acesso só pela service role, usado por `changeOwnPassword`.
 - `orders_view` — `orders` + nomes de autor/pagador/cancelador.
+- `keep_alive_probe` — sonda de atividade do plano free (1 linha, sem policy de RLS).
+  Único ponto onde o `anon` recebe `SELECT`; serve ao ping do keep-alive.
 
 ## Regras de negócio
 - Status: `aberto` → `entregue` → `pago`, ou `cancelado`. `pago` e `cancelado` são terminais.
@@ -72,6 +74,8 @@ supabase/
 
 ## Regras de Segurança
 - RLS obrigatório em toda tabela; policies por operação com `(select auth.uid())`.
+- O `anon` **não tem nenhum privilégio** no schema `public` — exceto `SELECT` em
+  `keep_alive_probe`, que é a sonda do keep-alive. Não ampliar essa exceção.
 - `orders` não tem policy de DELETE: cancelamento é status, não remoção.
 - `SUPABASE_SERVICE_ROLE_KEY` só em código de servidor (`lib/supabase/admin.ts`), nunca com prefixo `NEXT_PUBLIC_`.
 - Server Actions revalidam autorização no servidor; nunca confiar em papel vindo do cliente.

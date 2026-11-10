@@ -234,6 +234,65 @@ docs/
 
 ---
 
+## Keep-alive do Supabase (plano free) / Supabase keep-alive (free tier)
+
+O plano free do Supabase **pausa** projetos sem atividade depois de ~7 dias. Quando
+o projeto pausa, o DNS do host `<ref>.supabase.co` deixa de resolver e o app cai.
+
+O workflow [`.github/workflows/keep-alive.yml`](.github/workflows/keep-alive.yml) roda a
+cada 6 horas e faz quatro coisas:
+
+1. consulta o status do projeto na Management API;
+2. se estiver pausado, **restaura** o projeto (`POST /v1/projects/{ref}/restore`);
+3. espera o projeto voltar a `ACTIVE_HEALTHY`;
+4. roda um `SELECT` trivial no Postgres (via a tabela `keep_alive_probe`), que é o que
+   mantém o projeto acima do limiar de inatividade.
+
+O script que faz isso é [`.github/scripts/keep-alive.sh`](.github/scripts/keep-alive.sh) —
+dá para rodar localmente antes de mexer no workflow:
+
+```bash
+SUPABASE_ACCESS_TOKEN=... \
+SUPABASE_URL=https://<ref>.supabase.co \
+SUPABASE_ANON_KEY=... \
+bash .github/scripts/keep-alive.sh
+```
+
+### Secrets do repositório / Repository secrets
+
+| Secret | Valor | Observação |
+|---|---|---|
+| `SUPABASE_ACCESS_TOKEN` | PAT da Management API | **com escopo só neste projeto** (`read` + `restore`) |
+| `SUPABASE_URL` | `https://<ref>.supabase.co` | |
+| `SUPABASE_ANON_KEY` | chave anon/publishable | pública; usada só para o ping |
+| `SUPABASE_PROJECT_REF` | `<ref>` | opcional (é derivado da URL) |
+
+> O repositório é público. Secrets não vazam para forks (o GitHub não passa secrets
+> para PRs de forks) e o workflow não tem gatilho de `pull_request`, mas um PAT sem
+> escopo daria acesso a **todos** os projetos da conta se vazar. Use PAT com escopo.
+>
+> O workflow também grava um batimento no issue `[keep-alive]` (no máximo 1x/dia):
+> o GitHub **desabilita cron em repositório público sem atividade por 60 dias**, e sem
+> esse batimento o keep-alive pararia sozinho, em silêncio.
+
+### A tabela `keep_alive_probe`
+
+O ping precisa responder `200` para a chave `anon`, mas o projeto **não dá nenhum
+privilégio ao `anon`** (ver `supabase/migrations/20261026120000_init_schema.sql`). Por
+isso existe a tabela `public.keep_alive_probe`:
+
+- `anon` recebe **apenas** `SELECT`;
+- RLS ligado e **sem policy** → o `anon` enxerga zero linhas (`200` com `[]`);
+- a query ainda executa no Postgres — que é o que conta como atividade;
+- a tabela não guarda nada sensível (uma linha, um timestamp).
+
+*The ping must answer `200` for the `anon` key, but this project grants the `anon` role
+no privileges at all. Hence `public.keep_alive_probe`: `anon` gets `SELECT` only, RLS is
+on with **no policy** (so `anon` sees zero rows), the query still runs on Postgres, and
+the table holds nothing sensitive.*
+
+---
+
 ## Deploy
 
 1. **Vercel**: importe o repositório, root directory `apps/web`, e configure
